@@ -138,7 +138,8 @@ textarea.form-input { min-height: 80px; resize: vertical; }
       <!-- Event form -->
       <div id="event-form-wrap" style="display:none;margin-top:2rem">
         <div class="card"><div class="card-body">
-          <h3 id="event-form-title" style="margin-bottom:1.2rem">イベント作成</h3>
+          <h3 id="event-form-title" style="margin-bottom:0.5rem">イベント作成</h3>
+          <p id="draft-indicator" style="font-size:0.72rem;color:var(--c-muted);margin-bottom:1rem;min-height:1em"></p>
           <div class="form-stack" style="display:flex;flex-direction:column;gap:0.9rem">
             <div class="form-two">
               <div class="form-group">
@@ -371,22 +372,114 @@ function renderEventsList() {
 
 // ── Event form ───────────────────────────────────────────────
 let editingEventId = null;
+let autosaveTimer  = null;
+const DRAFT_KEY    = 'jazzin_event_draft';
+
+// 自動保存するフィールドID一覧
+const FORM_FIELDS = [
+  'ef-title','ef-venue','ef-event-at','ef-doors-at',
+  'ef-price','ef-capacity','ef-rows','ef-cols',
+  'ef-address','ef-desc','ef-notes','ef-hero',
+  'ef-status','ef-publish-at'
+];
+
+function saveDraft() {
+  // 編集中（既存イベント）は自動保存しない。新規作成のみ対象
+  if (editingEventId) return;
+  const draft = {};
+  FORM_FIELDS.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) draft[id] = el.value;
+  });
+  draft._savedAt = new Date().toLocaleTimeString('ja-JP');
+  localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+  // 保存インジケーター更新
+  const indicator = document.getElementById('draft-indicator');
+  if (indicator) indicator.textContent = `下書き自動保存済 ${draft._savedAt}`;
+}
+
+function loadDraft() {
+  try {
+    const raw = localStorage.getItem(DRAFT_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+
+function clearDraft() {
+  localStorage.removeItem(DRAFT_KEY);
+  const indicator = document.getElementById('draft-indicator');
+  if (indicator) indicator.textContent = '';
+}
+
+function startAutosave() {
+  // 各フィールドの入力イベントで3秒後に保存
+  FORM_FIELDS.forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener('input', () => {
+      clearTimeout(autosaveTimer);
+      const indicator = document.getElementById('draft-indicator');
+      if (indicator) indicator.textContent = '入力中...';
+      autosaveTimer = setTimeout(saveDraft, 3000);
+    });
+    el.addEventListener('change', () => {
+      clearTimeout(autosaveTimer);
+      autosaveTimer = setTimeout(saveDraft, 1000);
+    });
+  });
+}
 
 document.getElementById('btn-new-event').addEventListener('click', () => openEventForm(null));
 document.getElementById('btn-event-cancel').addEventListener('click', () => {
-  document.getElementById('event-form-wrap').style.display = 'none';
+  if (confirm('下書きを破棄しますか？')) {
+    clearDraft();
+    document.getElementById('event-form-wrap').style.display = 'none';
+  }
 });
 
 function openEventForm(ev) {
   editingEventId = ev?.id || null;
   document.getElementById('event-form-title').textContent = ev ? 'イベント編集' : 'イベント作成';
-  document.getElementById('ef-title').value     = ev?.title || '';
-  document.getElementById('ef-venue').value     = ev?.venue_name || '';
-  document.getElementById('ef-event-at').value  = ev?.event_at ? new Date(ev.event_at).toISOString().slice(0,16) : '';
-  document.getElementById('ef-price').value     = ev?.ticket_price || 500;
-  document.getElementById('ef-capacity').value  = ev?.capacity || 36;
-  document.getElementById('ef-status').value    = ev?.status || 'draft';
-  document.getElementById('btn-event-dup').style.display = ev ? 'inline-flex' : 'none';
+
+  if (ev) {
+    // 既存イベント編集：DBの値をセット
+    document.getElementById('ef-title').value      = ev.title || '';
+    document.getElementById('ef-venue').value      = ev.venue_name || '';
+    document.getElementById('ef-event-at').value   = ev.event_at ? new Date(ev.event_at).toISOString().slice(0,16) : '';
+    document.getElementById('ef-price').value      = ev.ticket_price || 500;
+    document.getElementById('ef-capacity').value   = ev.capacity || 36;
+    document.getElementById('ef-status').value     = ev.status || 'draft';
+    document.getElementById('btn-event-dup').style.display = 'inline-flex';
+  } else {
+    // 新規作成：下書きがあれば復元、なければデフォルト
+    const draft = loadDraft();
+    if (draft) {
+      const hasDraft = Object.keys(draft).some(k => k !== '_savedAt' && draft[k]);
+      if (hasDraft && confirm(`下書きが見つかりました（${draft._savedAt}）。復元しますか？`)) {
+        FORM_FIELDS.forEach(id => {
+          const el = document.getElementById(id);
+          if (el && draft[id] !== undefined) el.value = draft[id];
+        });
+        const indicator = document.getElementById('draft-indicator');
+        if (indicator) indicator.textContent = `下書き復元済 ${draft._savedAt}`;
+      } else {
+        // 復元しない場合はフォームをリセット
+        FORM_FIELDS.forEach(id => {
+          const el = document.getElementById(id);
+          if (el) el.value = el.defaultValue || '';
+        });
+        document.getElementById('ef-price').value    = '500';
+        document.getElementById('ef-capacity').value = '36';
+        document.getElementById('ef-rows').value     = '6';
+        document.getElementById('ef-cols').value     = '6';
+        document.getElementById('ef-status').value   = 'draft';
+      }
+    }
+    document.getElementById('btn-event-dup').style.display = 'none';
+    // 自動保存スタート
+    startAutosave();
+  }
+
   document.getElementById('event-form-wrap').style.display = 'block';
   document.getElementById('event-form-wrap').scrollIntoView({ behavior:'smooth' });
 }
@@ -426,6 +519,7 @@ document.getElementById('btn-event-save').addEventListener('click', async () => 
     await generateSeats(eventId, rows, cols);
   }
 
+  clearDraft();
   showToast('保存しました');
   document.getElementById('event-form-wrap').style.display = 'none';
   await loadAllEvents();
