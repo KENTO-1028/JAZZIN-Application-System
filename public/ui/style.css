@@ -1,0 +1,328 @@
+/* ============================================================
+   JAZZIN ライブ運営OS — design system
+   UI思想: Apple級の静けさ × Notion級整理感 × 空港チェックインUI
+   ============================================================ */
+
+:root {
+  --c-bg:         #0a0a0a;
+  --c-bg2:        #111111;
+  --c-bg3:        #191919;
+  --c-surface:    #1c1c1c;
+  --c-border:     rgba(255,255,255,0.08);
+  --c-border2:    rgba(255,255,255,0.14);
+  --c-text:       #f0efec;
+  --c-muted:      #888884;
+  --c-dim:        #555553;
+
+  --c-accent:     #e8c97a;     /* jazz gold */
+  --c-accent2:    #d4a843;
+  --c-green:      #4caf6e;
+  --c-red:        #e05252;
+  --c-blue:       #5b9cf6;
+
+  --seat-sz:      36px;
+  --seat-gap:     5px;
+  --radius:       8px;
+  --radius-lg:    14px;
+  --transition:   120ms ease;
+
+  font-family: 'SF Pro Display', 'Hiragino Sans', 'Yu Gothic UI', -apple-system, sans-serif;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { font-size: 16px; scroll-behavior: smooth; }
+
+body {
+  background: var(--c-bg);
+  color: var(--c-text);
+  min-height: 100dvh;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Typography ─────────────────────────────────────────── */
+h1 { font-size: 2rem; font-weight: 600; letter-spacing: -0.02em; }
+h2 { font-size: 1.4rem; font-weight: 500; letter-spacing: -0.01em; }
+h3 { font-size: 1.1rem; font-weight: 500; }
+p  { color: var(--c-muted); }
+
+/* ── Layout ─────────────────────────────────────────────── */
+.container { max-width: 900px; margin: 0 auto; padding: 0 1.25rem; }
+.page { padding: 2rem 0 4rem; }
+
+/* ── Header ─────────────────────────────────────────────── */
+.header {
+  position: sticky; top: 0; z-index: 100;
+  background: rgba(10,10,10,0.92);
+  backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--c-border);
+}
+.header-inner {
+  max-width: 900px; margin: 0 auto;
+  padding: 0 1.25rem;
+  height: 54px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.logo {
+  font-size: 1.05rem; font-weight: 700;
+  letter-spacing: 0.12em; color: var(--c-accent);
+  text-decoration: none;
+}
+
+/* ── Buttons ─────────────────────────────────────────────── */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 0.55rem 1.2rem;
+  border-radius: var(--radius);
+  font-size: 0.875rem; font-weight: 500;
+  cursor: pointer; border: none;
+  transition: var(--transition);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.btn-primary {
+  background: var(--c-accent); color: #0a0a0a;
+}
+.btn-primary:hover { background: var(--c-accent2); }
+.btn-primary:disabled { background: var(--c-dim); color: var(--c-bg); cursor: not-allowed; }
+
+.btn-ghost {
+  background: transparent;
+  border: 1px solid var(--c-border2);
+  color: var(--c-muted);
+}
+.btn-ghost:hover { border-color: var(--c-text); color: var(--c-text); background: var(--c-surface); }
+
+.btn-danger { background: var(--c-red); color: #fff; }
+.btn-success { background: var(--c-green); color: #fff; }
+.btn-lg { padding: 0.8rem 1.8rem; font-size: 1rem; }
+.btn-full { width: 100%; }
+.btn-sm { padding: 0.35rem 0.8rem; font-size: 0.8rem; }
+
+/* ── Cards ───────────────────────────────────────────────── */
+.card {
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+.card-body { padding: 1.25rem; }
+
+/* ── Event card (映画アプリ風) ───────────────────────────── */
+.event-card {
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  display: flex; flex-direction: column;
+  transition: border-color 200ms, transform 200ms;
+  cursor: pointer;
+  text-decoration: none; color: inherit;
+}
+.event-card:hover {
+  border-color: var(--c-border2);
+  transform: translateY(-2px);
+}
+.event-card-img {
+  width: 100%; aspect-ratio: 16/9; object-fit: cover;
+  background: var(--c-bg3);
+}
+.event-card-img-placeholder {
+  width: 100%; aspect-ratio: 16/9;
+  background: var(--c-bg3);
+  display: flex; align-items: center; justify-content: center;
+}
+.event-card-body { padding: 1rem 1.1rem 1.2rem; flex: 1; display: flex; flex-direction: column; gap: 0.35rem; }
+.event-card-title { font-size: 1rem; font-weight: 600; color: var(--c-text); }
+.event-card-meta { font-size: 0.8rem; color: var(--c-muted); }
+.event-card-footer {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-top: auto; padding-top: 0.6rem;
+}
+
+/* ── Badges ──────────────────────────────────────────────── */
+.badge {
+  display: inline-block;
+  padding: 0.2rem 0.55rem;
+  border-radius: 4px;
+  font-size: 0.72rem; font-weight: 600;
+  letter-spacing: 0.04em;
+}
+.badge-ok   { background: rgba(76,175,110,0.15); color: var(--c-green); }
+.badge-few  { background: rgba(232,201,122,0.15); color: var(--c-accent); }
+.badge-sold { background: rgba(224,82,82,0.12); color: var(--c-red); }
+.badge-admin { background: rgba(91,156,246,0.15); color: var(--c-blue); }
+
+/* ── Seat map ────────────────────────────────────────────── */
+.stage-label {
+  text-align: center;
+  font-size: 0.72rem; font-weight: 600;
+  letter-spacing: 0.2em; color: var(--c-dim);
+  padding: 0.4rem 0;
+  border: 1px solid var(--c-border);
+  border-radius: 4px;
+  margin-bottom: 1.2rem;
+  background: var(--c-bg3);
+}
+.seat-grid {
+  display: grid;
+  gap: var(--seat-gap);
+}
+.seat {
+  width: var(--seat-sz); height: var(--seat-sz);
+  border-radius: 5px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.6rem; font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition);
+  user-select: none;
+  border: 1px solid transparent;
+}
+.seat[data-status="available"] {
+  background: var(--c-bg3);
+  border-color: var(--c-border2);
+  color: var(--c-muted);
+}
+.seat[data-status="available"]:hover {
+  background: rgba(232,201,122,0.15);
+  border-color: var(--c-accent);
+  color: var(--c-accent);
+}
+.seat[data-status="selected"] {
+  background: var(--c-accent);
+  border-color: var(--c-accent2);
+  color: #0a0a0a;
+}
+.seat[data-status="locked"] {
+  background: rgba(232,201,122,0.06);
+  border-color: rgba(232,201,122,0.2);
+  color: var(--c-dim);
+  cursor: not-allowed;
+}
+.seat[data-status="reserved"] {
+  background: rgba(224,82,82,0.12);
+  border-color: rgba(224,82,82,0.25);
+  color: var(--c-red);
+  cursor: not-allowed;
+}
+.seat[data-status="checked_in"] {
+  background: rgba(76,175,110,0.12);
+  border-color: rgba(76,175,110,0.25);
+  color: var(--c-green);
+  cursor: not-allowed;
+}
+.seat-legend {
+  display: flex; gap: 1.2rem; flex-wrap: wrap;
+  margin-top: 1rem; font-size: 0.75rem; color: var(--c-muted);
+}
+.seat-legend-item { display: flex; align-items: center; gap: 5px; }
+.seat-legend-dot {
+  width: 10px; height: 10px; border-radius: 2px;
+}
+
+/* ── Forms ───────────────────────────────────────────────── */
+.form-group { display: flex; flex-direction: column; gap: 0.4rem; }
+.form-label { font-size: 0.8rem; font-weight: 500; color: var(--c-muted); }
+.form-input {
+  background: var(--c-bg2);
+  border: 1px solid var(--c-border2);
+  border-radius: var(--radius);
+  padding: 0.6rem 0.85rem;
+  color: var(--c-text);
+  font-size: 0.95rem;
+  transition: var(--transition);
+  width: 100%;
+  font-family: inherit;
+}
+.form-input:focus {
+  outline: none;
+  border-color: var(--c-accent);
+  box-shadow: 0 0 0 3px rgba(232,201,122,0.12);
+}
+.form-input::placeholder { color: var(--c-dim); }
+
+/* ── Checkin UI ──────────────────────────────────────────── */
+.checkin-result {
+  border-radius: var(--radius-lg);
+  padding: 1.5rem;
+  border: 1px solid var(--c-border);
+  background: var(--c-surface);
+}
+.checkin-name {
+  font-size: 2rem; font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--c-text);
+}
+.checkin-seats {
+  font-size: 1.2rem; font-weight: 600;
+  color: var(--c-accent);
+}
+.checkin-price {
+  font-size: 1.8rem; font-weight: 700;
+  color: var(--c-text);
+}
+.checkin-complete {
+  background: rgba(76,175,110,0.1);
+  border-color: rgba(76,175,110,0.3);
+}
+.checkin-error {
+  background: rgba(224,82,82,0.08);
+  border-color: rgba(224,82,82,0.3);
+}
+
+/* ── Divider ─────────────────────────────────────────────── */
+.divider { height: 1px; background: var(--c-border); margin: 1rem 0; }
+
+/* ── Grid ────────────────────────────────────────────────── */
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+.grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }
+.events-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 1rem; }
+
+/* ── Loading ─────────────────────────────────────────────── */
+.skeleton {
+  background: var(--c-surface);
+  border-radius: var(--radius);
+  animation: pulse 1.5s infinite;
+}
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+.spinner {
+  width: 20px; height: 20px;
+  border: 2px solid var(--c-border2);
+  border-top-color: var(--c-accent);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Toast ───────────────────────────────────────────────── */
+#toast {
+  position: fixed; bottom: 1.5rem; left: 50%; transform: translateX(-50%);
+  background: var(--c-surface); border: 1px solid var(--c-border2);
+  border-radius: var(--radius); padding: 0.65rem 1.2rem;
+  font-size: 0.875rem; color: var(--c-text);
+  opacity: 0; pointer-events: none;
+  transition: opacity 200ms;
+  z-index: 9999;
+  white-space: nowrap;
+}
+#toast.show { opacity: 1; }
+
+/* ── Responsive ──────────────────────────────────────────── */
+@media (max-width: 640px) {
+  h1 { font-size: 1.5rem; }
+  .grid-2, .grid-3 { grid-template-columns: 1fr; }
+  :root { --seat-sz: 30px; --seat-gap: 4px; }
+}
+
+/* ── QR container ────────────────────────────────────────── */
+.qr-box {
+  background: #fff;
+  border-radius: var(--radius);
+  display: inline-flex; padding: 12px;
+}
+
+/* ── Scrollbar ───────────────────────────────────────────── */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: var(--c-bg); }
+::-webkit-scrollbar-thumb { background: var(--c-dim); border-radius: 3px; }

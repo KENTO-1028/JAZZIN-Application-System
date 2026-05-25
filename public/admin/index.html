@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>JAZZIN — 管理ダッシュボード</title>
+<link rel="stylesheet" href="/ui/style.css">
+<script src="/config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<style>
+.admin-layout { display: grid; grid-template-columns: 200px 1fr; min-height: 100dvh; }
+.sidebar {
+  background: var(--c-bg2);
+  border-right: 1px solid var(--c-border);
+  padding: 1rem 0;
+  position: sticky; top: 0; height: 100dvh;
+  overflow-y: auto;
+}
+.sidebar-logo {
+  padding: 0.5rem 1.25rem 1rem;
+  font-size: 1rem; font-weight: 700;
+  letter-spacing: 0.12em; color: var(--c-accent);
+}
+.sidebar-section {
+  font-size: 0.65rem; font-weight: 600;
+  letter-spacing: 0.15em; color: var(--c-dim);
+  padding: 0.75rem 1.25rem 0.3rem;
+}
+.sidebar-link {
+  display: flex; align-items: center; gap: 0.5rem;
+  padding: 0.55rem 1.25rem;
+  color: var(--c-muted); text-decoration: none;
+  font-size: 0.875rem;
+  transition: var(--transition);
+  border-left: 2px solid transparent;
+}
+.sidebar-link:hover { color: var(--c-text); background: var(--c-surface); }
+.sidebar-link.active { color: var(--c-accent); border-left-color: var(--c-accent); background: rgba(232,201,122,0.06); }
+.main-area { padding: 2rem; overflow-y: auto; }
+.page-title { font-size: 1.4rem; font-weight: 600; margin-bottom: 1.5rem; }
+/* Stats cards */
+.stats-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px,1fr)); gap: 0.75rem; margin-bottom: 2rem; }
+.stat-card {
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius);
+  padding: 1rem;
+}
+.stat-card-label { font-size: 0.7rem; color: var(--c-muted); letter-spacing: 0.08em; margin-bottom: 0.3rem; }
+.stat-card-value { font-size: 1.6rem; font-weight: 700; }
+/* Table */
+.data-table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+.data-table th {
+  text-align: left; padding: 0.6rem 0.75rem;
+  font-size: 0.7rem; font-weight: 600;
+  letter-spacing: 0.08em; color: var(--c-muted);
+  border-bottom: 1px solid var(--c-border);
+}
+.data-table td {
+  padding: 0.7rem 0.75rem;
+  border-bottom: 1px solid var(--c-border);
+  vertical-align: middle;
+}
+.data-table tr:hover td { background: var(--c-surface); }
+.data-table tr:last-child td { border-bottom: none; }
+/* Event form */
+.form-two { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+textarea.form-input { min-height: 80px; resize: vertical; }
+@media(max-width:640px) {
+  .admin-layout { grid-template-columns: 1fr; }
+  .sidebar { position: static; height: auto; }
+  .form-two { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+
+<div class="admin-layout">
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">JAZZIN</div>
+    <div class="sidebar-section">運営</div>
+    <a href="#dashboard" class="sidebar-link active" data-section="dashboard">📊 ダッシュボード</a>
+    <a href="/checkin.html" class="sidebar-link" target="_blank">📷 受付モード</a>
+    <div class="sidebar-section">管理</div>
+    <a href="#events" class="sidebar-link" data-section="events">🎵 イベント</a>
+    <a href="#reservations" class="sidebar-link" data-section="reservations">🎟 予約一覧</a>
+    <a href="#seats" class="sidebar-link" data-section="seats">💺 座席</a>
+    <div style="margin-top:auto;padding:1rem 1.25rem">
+      <button class="btn btn-ghost btn-sm btn-full" id="btn-signout">ログアウト</button>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <main class="main-area">
+    <div id="auth-guard" style="text-align:center;padding:4rem;display:none">
+      <p style="margin-bottom:1rem">管理者ログインが必要です</p>
+      <a href="/admin/login.html" class="btn btn-primary">ログイン</a>
+    </div>
+
+    <!-- Dashboard -->
+    <div id="section-dashboard">
+      <p class="page-title">ダッシュボード</p>
+      <div id="dashboard-event-select" style="margin-bottom:1.5rem">
+        <select class="form-input" id="sel-event" style="max-width:400px">
+          <option value="">イベントを選択...</option>
+        </select>
+      </div>
+      <div class="stats-grid" id="stats-grid">
+        <div class="stat-card"><div class="stat-card-label">予約数</div><div class="stat-card-value" id="s-reservations">--</div></div>
+        <div class="stat-card"><div class="stat-card-label">入場済</div><div class="stat-card-value" id="s-checkins" style="color:var(--c-green)">--</div></div>
+        <div class="stat-card"><div class="stat-card-label">未入場</div><div class="stat-card-value" id="s-remaining">--</div></div>
+        <div class="stat-card"><div class="stat-card-label">回収額</div><div class="stat-card-value" id="s-cash" style="color:var(--c-accent)">--</div></div>
+      </div>
+      <div style="display:flex;gap:0.75rem;margin-bottom:1rem">
+        <button class="btn btn-ghost btn-sm" id="btn-csv">📥 CSV出力</button>
+      </div>
+      <div style="overflow-x:auto">
+        <table class="data-table" id="rsv-table">
+          <thead>
+            <tr>
+              <th>受付番号</th><th>名前</th><th>座席</th><th>人数</th>
+              <th>支払</th><th>チェックイン</th>
+            </tr>
+          </thead>
+          <tbody id="rsv-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Events -->
+    <div id="section-events" style="display:none">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.5rem">
+        <p class="page-title" style="margin:0">イベント管理</p>
+        <button class="btn btn-primary btn-sm" id="btn-new-event">+ 新規作成</button>
+      </div>
+      <div id="events-list"></div>
+      <!-- Event form -->
+      <div id="event-form-wrap" style="display:none;margin-top:2rem">
+        <div class="card"><div class="card-body">
+          <h3 id="event-form-title" style="margin-bottom:1.2rem">イベント作成</h3>
+          <div class="form-stack" style="display:flex;flex-direction:column;gap:0.9rem">
+            <div class="form-two">
+              <div class="form-group">
+                <label class="form-label">タイトル *</label>
+                <input type="text" class="form-input" id="ef-title">
+              </div>
+              <div class="form-group">
+                <label class="form-label">会場名 *</label>
+                <input type="text" class="form-input" id="ef-venue">
+              </div>
+            </div>
+            <div class="form-two">
+              <div class="form-group">
+                <label class="form-label">開催日時 *</label>
+                <input type="datetime-local" class="form-input" id="ef-event-at">
+              </div>
+              <div class="form-group">
+                <label class="form-label">開場時間</label>
+                <input type="datetime-local" class="form-input" id="ef-doors-at">
+              </div>
+            </div>
+            <div class="form-two">
+              <div class="form-group">
+                <label class="form-label">チケット料金 (円)</label>
+                <input type="number" class="form-input" id="ef-price" value="500" min="0">
+              </div>
+              <div class="form-group">
+                <label class="form-label">座席数</label>
+                <input type="number" class="form-input" id="ef-capacity" value="36" min="1">
+              </div>
+            </div>
+            <div class="form-two">
+              <div class="form-group">
+                <label class="form-label">行数 (rows)</label>
+                <input type="number" class="form-input" id="ef-rows" value="6" min="1" max="20">
+              </div>
+              <div class="form-group">
+                <label class="form-label">列数 (cols)</label>
+                <input type="number" class="form-input" id="ef-cols" value="6" min="1" max="20">
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">会場住所</label>
+              <input type="text" class="form-input" id="ef-address">
+            </div>
+            <div class="form-group">
+              <label class="form-label">説明</label>
+              <textarea class="form-input" id="ef-desc" rows="3"></textarea>
+            </div>
+            <div class="form-group">
+              <label class="form-label">注意事項</label>
+              <textarea class="form-input" id="ef-notes" rows="2"></textarea>
+            </div>
+            <div class="form-group">
+              <label class="form-label">ヒーロー画像URL</label>
+              <input type="url" class="form-input" id="ef-hero">
+            </div>
+            <div class="form-two">
+              <div class="form-group">
+                <label class="form-label">ステータス</label>
+                <select class="form-input" id="ef-status">
+                  <option value="draft">下書き</option>
+                  <option value="published">公開</option>
+                  <option value="ended">終了</option>
+                  <option value="cancelled">キャンセル</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">公開日時</label>
+                <input type="datetime-local" class="form-input" id="ef-publish-at">
+              </div>
+            </div>
+            <div style="display:flex;gap:0.75rem;margin-top:0.5rem">
+              <button class="btn btn-ghost" id="btn-event-cancel">キャンセル</button>
+              <button class="btn btn-primary" id="btn-event-save">保存</button>
+              <button class="btn btn-ghost btn-sm" id="btn-event-dup" style="display:none">複製</button>
+            </div>
+          </div>
+        </div></div>
+      </div>
+    </div>
+
+    <!-- Reservations (cross-event) -->
+    <div id="section-reservations" style="display:none">
+      <p class="page-title">予約一覧</p>
+      <p style="color:var(--c-muted);font-size:0.875rem">ダッシュボードでイベントを選択してCSV出力できます</p>
+    </div>
+
+    <!-- Seats -->
+    <div id="section-seats" style="display:none">
+      <p class="page-title">座席管理</p>
+      <p style="color:var(--c-muted);font-size:0.875rem">イベント作成時に自動生成されます</p>
+    </div>
+
+  </main>
+</div>
+
+<div id="toast"></div>
+
+<script type="module">
+import { supabase, signOut, formatDate, formatPrice } from '/core/supabase.js';
+
+function showToast(msg,ms=2000){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),ms);}
+
+// ── Auth guard ───────────────────────────────────────────────
+async function checkAuth() {
+  const { data } = await supabase.auth.getUser();
+  if (!data?.user) {
+    document.getElementById('auth-guard').style.display = 'block';
+    document.querySelectorAll('[id^="section-"]').forEach(el=>el.style.display='none');
+    return false;
+  }
+  return true;
+}
+
+document.getElementById('btn-signout').addEventListener('click', async () => {
+  await signOut(); location.href = '/admin/login.html';
+});
+
+// ── Nav ──────────────────────────────────────────────────────
+document.querySelectorAll('[data-section]').forEach(link => {
+  link.addEventListener('click', e => {
+    e.preventDefault();
+    const sec = link.dataset.section;
+    document.querySelectorAll('[id^="section-"]').forEach(el => el.style.display='none');
+    document.getElementById(`section-${sec}`).style.display = 'block';
+    document.querySelectorAll('.sidebar-link').forEach(l=>l.classList.remove('active'));
+    link.classList.add('active');
+  });
+});
+
+// ── Load events for selector ─────────────────────────────────
+let allEvents = [];
+async function loadAllEvents() {
+  const { data } = await supabase
+    .from('events')
+    .select('id, title, event_at, status, ticket_price, capacity')
+    .order('event_at', { ascending: false });
+  allEvents = data || [];
+  const sel = document.getElementById('sel-event');
+  allEvents.forEach(ev => {
+    const o = document.createElement('option');
+    o.value = ev.id; o.textContent = `${ev.title} (${new Date(ev.event_at).toLocaleDateString('ja-JP')})`;
+    sel.appendChild(o);
+  });
+  renderEventsList();
+}
+
+document.getElementById('sel-event').addEventListener('change', e => {
+  const ev = allEvents.find(x => x.id === e.target.value);
+  if (ev) loadDashboard(ev);
+});
+
+// ── Dashboard ────────────────────────────────────────────────
+async function loadDashboard(ev) {
+  const [rsvData, checkinData] = await Promise.all([
+    supabase.from('reservations')
+      .select('id, reservation_code, guest_name, num_seats, payment_status, reservation_seats(seat:seats(label))')
+      .eq('event_id', ev.id)
+      .order('created_at'),
+    supabase.from('checkins')
+      .select('reservation_id')
+      .eq('event_id', ev.id),
+  ]);
+
+  const reservations = rsvData.data || [];
+  const checkins = new Set((checkinData.data||[]).map(c=>c.reservation_id));
+
+  const totalPeople = reservations.reduce((s,r)=>s+r.num_seats,0);
+  const checkedIn   = reservations.filter(r=>checkins.has(r.id)).length;
+  const cashSeats   = reservations.filter(r=>r.payment_status==='paid_cash').reduce((s,r)=>s+r.num_seats,0);
+
+  document.getElementById('s-reservations').textContent = totalPeople;
+  document.getElementById('s-checkins').textContent     = checkedIn;
+  document.getElementById('s-remaining').textContent    = reservations.length - checkedIn;
+  document.getElementById('s-cash').textContent         = formatPrice(cashSeats * (ev.ticket_price||500));
+
+  const tbody = document.getElementById('rsv-tbody');
+  tbody.innerHTML = reservations.map(r => {
+    const seats = r.reservation_seats?.map(rs=>rs.seat?.label).join(' ') || '--';
+    const isIn  = checkins.has(r.id);
+    return `<tr>
+      <td style="font-weight:600;color:var(--c-accent)">${r.reservation_code}</td>
+      <td>${r.guest_name}</td>
+      <td>${seats}</td>
+      <td>${r.num_seats}</td>
+      <td><span class="badge ${r.payment_status==='paid_cash'?'badge-ok':'badge-sold'}">${r.payment_status==='paid_cash'?'支払済':'未払い'}</span></td>
+      <td><span class="badge ${isIn?'badge-ok':''}">${isIn?'入場済':'未入場'}</span></td>
+    </tr>`;
+  }).join('');
+
+  // CSV export
+  document.getElementById('btn-csv').onclick = () => exportCSV(ev, reservations, checkins);
+}
+
+function exportCSV(ev, reservations, checkins) {
+  const rows = [['受付番号','名前','座席','人数','支払','チェックイン']];
+  reservations.forEach(r => {
+    const seats = r.reservation_seats?.map(rs=>rs.seat?.label).join('/') || '';
+    rows.push([r.reservation_code, r.guest_name, seats, r.num_seats, r.payment_status, checkins.has(r.id)?'済':'']);
+  });
+  const csv = rows.map(r=>r.map(v=>`"${v}"`).join(',')).join('\n');
+  const blob = new Blob(['\uFEFF'+csv], {type:'text/csv;charset=utf-8'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `${ev.title}-${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+}
+
+// ── Events list ──────────────────────────────────────────────
+function renderEventsList() {
+  const el = document.getElementById('events-list');
+  el.innerHTML = allEvents.map(ev => `
+    <div style="display:flex;align-items:center;gap:1rem;padding:1rem;background:var(--c-surface);border:1px solid var(--c-border);border-radius:var(--radius);margin-bottom:0.6rem">
+      <div style="flex:1">
+        <div style="font-weight:600">${ev.title}</div>
+        <div style="font-size:0.8rem;color:var(--c-muted)">${formatDate(ev.event_at)} — ${formatPrice(ev.ticket_price)}</div>
+      </div>
+      <span class="badge ${ev.status==='published'?'badge-ok':'badge-admin'}">${ev.status}</span>
+      <button class="btn btn-ghost btn-sm" data-edit="${ev.id}">編集</button>
+    </div>`).join('');
+
+  el.querySelectorAll('[data-edit]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const ev = allEvents.find(e=>e.id===btn.dataset.edit);
+      if (ev) openEventForm(ev);
+    });
+  });
+}
+
+// ── Event form ───────────────────────────────────────────────
+let editingEventId = null;
+
+document.getElementById('btn-new-event').addEventListener('click', () => openEventForm(null));
+document.getElementById('btn-event-cancel').addEventListener('click', () => {
+  document.getElementById('event-form-wrap').style.display = 'none';
+});
+
+function openEventForm(ev) {
+  editingEventId = ev?.id || null;
+  document.getElementById('event-form-title').textContent = ev ? 'イベント編集' : 'イベント作成';
+  document.getElementById('ef-title').value     = ev?.title || '';
+  document.getElementById('ef-venue').value     = ev?.venue_name || '';
+  document.getElementById('ef-event-at').value  = ev?.event_at ? new Date(ev.event_at).toISOString().slice(0,16) : '';
+  document.getElementById('ef-price').value     = ev?.ticket_price || 500;
+  document.getElementById('ef-capacity').value  = ev?.capacity || 36;
+  document.getElementById('ef-status').value    = ev?.status || 'draft';
+  document.getElementById('btn-event-dup').style.display = ev ? 'inline-flex' : 'none';
+  document.getElementById('event-form-wrap').style.display = 'block';
+  document.getElementById('event-form-wrap').scrollIntoView({ behavior:'smooth' });
+}
+
+document.getElementById('btn-event-save').addEventListener('click', async () => {
+  const rows = parseInt(document.getElementById('ef-rows').value)||6;
+  const cols = parseInt(document.getElementById('ef-cols').value)||6;
+
+  const payload = {
+    title:         document.getElementById('ef-title').value.trim(),
+    venue_name:    document.getElementById('ef-venue').value.trim(),
+    event_at:      document.getElementById('ef-event-at').value,
+    doors_open_at: document.getElementById('ef-doors-at').value || null,
+    ticket_price:  parseInt(document.getElementById('ef-price').value)||500,
+    capacity:      rows * cols,
+    venue_address: document.getElementById('ef-address').value.trim() || null,
+    description:   document.getElementById('ef-desc').value.trim() || null,
+    notes:         document.getElementById('ef-notes').value.trim() || null,
+    hero_image_url:document.getElementById('ef-hero').value.trim() || null,
+    status:        document.getElementById('ef-status').value,
+    publish_at:    document.getElementById('ef-publish-at').value || null,
+  };
+
+  if (!payload.title || !payload.venue_name || !payload.event_at) {
+    showToast('必須項目を入力してください'); return;
+  }
+
+  let eventId = editingEventId;
+  if (editingEventId) {
+    const { error } = await supabase.from('events').update(payload).eq('id', editingEventId);
+    if (error) { showToast('保存失敗: ' + error.message); return; }
+  } else {
+    const { data, error } = await supabase.from('events').insert(payload).select('id').single();
+    if (error) { showToast('作成失敗: ' + error.message); return; }
+    eventId = data.id;
+    // Auto-generate seats
+    await generateSeats(eventId, rows, cols);
+  }
+
+  showToast('保存しました');
+  document.getElementById('event-form-wrap').style.display = 'none';
+  await loadAllEvents();
+});
+
+// ── Duplicate event ──────────────────────────────────────────
+document.getElementById('btn-event-dup').addEventListener('click', async () => {
+  if (!editingEventId) return;
+  const ev = allEvents.find(e=>e.id===editingEventId);
+  if (!ev) return;
+
+  const { data: fullEv } = await supabase.from('events').select('*').eq('id', editingEventId).single();
+  const { id: _, created_at: __, updated_at: ___, ...rest } = fullEv;
+  const { data: newEv, error } = await supabase.from('events')
+    .insert({ ...rest, title: rest.title + ' (複製)', status: 'draft' })
+    .select('id').single();
+  if (error) { showToast('複製失敗'); return; }
+
+  // Duplicate seats
+  const { data: oldSeats } = await supabase.from('seats').select('row_num,col_num,label').eq('event_id', editingEventId);
+  if (oldSeats?.length) {
+    await supabase.from('seats').insert(oldSeats.map(s=>({...s, event_id: newEv.id})));
+  }
+  showToast('複製しました');
+  await loadAllEvents();
+});
+
+// ── Generate seats ───────────────────────────────────────────
+async function generateSeats(eventId, rows, cols) {
+  const seats = [];
+  const rowLetters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  for (let r = 1; r <= rows; r++) {
+    for (let c = 1; c <= cols; c++) {
+      seats.push({
+        event_id: eventId,
+        row_num: r, col_num: c,
+        label: `${rowLetters[r-1]}-${c}`,
+        status: 'available',
+      });
+    }
+  }
+  const { error } = await supabase.from('seats').insert(seats);
+  if (error) console.error('seat gen error', error);
+}
+
+// ── Init ─────────────────────────────────────────────────────
+async function init() {
+  const ok = await checkAuth();
+  if (!ok) return;
+  await loadAllEvents();
+}
+init();
+</script>
+</body>
+</html>

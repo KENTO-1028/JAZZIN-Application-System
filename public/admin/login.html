@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>JAZZIN — 管理者ログイン</title>
+<link rel="stylesheet" href="/ui/style.css">
+<script src="/config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<style>
+body { display:flex; align-items:center; justify-content:center; min-height:100dvh; }
+.login-wrap { width:100%; max-width:360px; padding:1.5rem; }
+.login-logo { text-align:center; font-size:1.4rem; font-weight:700; letter-spacing:0.15em; color:var(--c-accent); margin-bottom:0.4rem; }
+.login-sub  { text-align:center; font-size:0.8rem; color:var(--c-muted); margin-bottom:2rem; }
+.login-card { background:var(--c-surface); border:1px solid var(--c-border); border-radius:var(--radius-lg); padding:1.75rem; }
+.form-stack { display:flex; flex-direction:column; gap:1rem; }
+.error-msg  { font-size:0.8rem; color:var(--c-red); text-align:center; min-height:1.2em; }
+</style>
+</head>
+<body>
+<div class="login-wrap">
+  <div class="login-logo">JAZZIN</div>
+  <p class="login-sub">スタッフログイン</p>
+  <div class="login-card">
+    <div class="form-stack">
+      <div class="form-group">
+        <label class="form-label">メールアドレス</label>
+        <input type="email" class="form-input" id="f-email" autocomplete="email" placeholder="admin@example.com">
+      </div>
+      <div class="form-group">
+        <label class="form-label">パスワード</label>
+        <input type="password" class="form-input" id="f-pass" autocomplete="current-password" placeholder="••••••••">
+      </div>
+      <p class="error-msg" id="err-msg"></p>
+      <button class="btn btn-primary btn-full" id="btn-login">
+        <span id="spinner" class="spinner" style="display:none"></span>
+        ログイン
+      </button>
+      <a href="/" class="btn btn-ghost btn-full btn-sm" style="text-align:center">← 客向けサイトへ</a>
+    </div>
+  </div>
+</div>
+<script type="module">
+import { supabase, signInAdmin } from '/core/supabase.js';
+
+// Already logged in?
+(async () => {
+  const { data } = await supabase.auth.getUser();
+  if (data?.user) location.href = '/admin/index.html';
+})();
+
+const emailEl = document.getElementById('f-email');
+const passEl  = document.getElementById('f-pass');
+const errEl   = document.getElementById('err-msg');
+const btn     = document.getElementById('btn-login');
+const spinner = document.getElementById('spinner');
+
+async function login() {
+  errEl.textContent = '';
+  const email = emailEl.value.trim();
+  const pass  = passEl.value;
+  if (!email || !pass) { errEl.textContent = 'メールとパスワードを入力してください'; return; }
+
+  btn.disabled = true;
+  spinner.style.display = 'inline-block';
+  try {
+    await signInAdmin(email, pass);
+    const redirect = new URLSearchParams(location.search).get('next') || '/admin/index.html';
+    location.href = redirect;
+  } catch (e) {
+    errEl.textContent = 'メールアドレスまたはパスワードが違います';
+    btn.disabled = false;
+    spinner.style.display = 'none';
+  }
+}
+
+btn.addEventListener('click', login);
+[emailEl, passEl].forEach(el => el.addEventListener('keydown', e => { if (e.key === 'Enter') login(); }));
+</script>
+</body>
+</html>

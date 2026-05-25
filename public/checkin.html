@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#0a0a0a">
+<title>JAZZIN — 受付</title>
+<link rel="stylesheet" href="/ui/style.css">
+<script src="/config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<style>
+/* =====================================================
+   受付モード: 暗所・片手・高速・脳負荷最小
+   ===================================================== */
+body { background: #0a0a0a; overflow-x: hidden; }
+
+.checkin-layout {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+}
+
+/* Camera zone */
+.camera-zone {
+  position: relative;
+  width: 100%;
+  background: #000;
+  flex-shrink: 0;
+}
+#reader {
+  width: 100%;
+}
+#reader video { width: 100% !important; }
+.scan-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.scan-frame {
+  width: 200px; height: 200px;
+  border: 2px solid var(--c-accent);
+  border-radius: 12px;
+  box-shadow: 0 0 0 9999px rgba(0,0,0,0.45);
+}
+.scan-line {
+  position: absolute;
+  width: 176px;
+  height: 2px;
+  background: var(--c-accent);
+  opacity: 0.8;
+  animation: scanAnim 2s ease-in-out infinite;
+}
+@keyframes scanAnim {
+  0%   { top: calc(50% - 88px); }
+  50%  { top: calc(50% + 88px); }
+  100% { top: calc(50% - 88px); }
+}
+.scan-status {
+  position: absolute;
+  bottom: 12px;
+  left: 0; right: 0;
+  text-align: center;
+  font-size: 0.75rem;
+  color: rgba(255,255,255,0.5);
+  letter-spacing: 0.1em;
+}
+
+/* Result zone */
+.result-zone {
+  flex: 1;
+  padding: 1rem;
+  overflow-y: auto;
+}
+
+/* Guest info — HIGH CONTRAST for dark venue */
+.guest-card {
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-radius: 14px;
+  padding: 1.25rem;
+  margin-bottom: 0.75rem;
+}
+.guest-card.state-ready {
+  border-color: var(--c-accent);
+  background: rgba(232,201,122,0.05);
+}
+.guest-card.state-done {
+  border-color: var(--c-green);
+  background: rgba(76,175,110,0.08);
+}
+.guest-card.state-error {
+  border-color: var(--c-red);
+  background: rgba(224,82,82,0.05);
+}
+
+.g-name {
+  font-size: 2rem; font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  margin-bottom: 0.4rem;
+}
+.g-seats {
+  font-size: 1.2rem; font-weight: 600;
+  color: var(--c-accent);
+  margin-bottom: 0.25rem;
+}
+.g-meta {
+  font-size: 0.85rem; color: var(--c-muted);
+  display: flex; gap: 0.75rem; flex-wrap: wrap;
+  margin-bottom: 0.75rem;
+}
+.g-price {
+  font-size: 2rem; font-weight: 700;
+  color: var(--c-text);
+}
+.g-price-label {
+  font-size: 0.7rem; letter-spacing: 0.1em;
+  color: var(--c-muted); margin-bottom: 2px;
+}
+.g-badge-paid {
+  display: inline-flex; align-items: center; gap: 4px;
+  background: rgba(76,175,110,0.15);
+  border: 1px solid rgba(76,175,110,0.3);
+  color: var(--c-green);
+  border-radius: 6px; padding: 0.3rem 0.7rem;
+  font-size: 0.8rem; font-weight: 600;
+}
+
+/* Action buttons — big for fast touch */
+.action-row {
+  display: flex; gap: 0.6rem;
+}
+.btn-checkin {
+  flex: 1;
+  height: 60px;
+  font-size: 1.1rem; font-weight: 700;
+  border-radius: 12px;
+  background: var(--c-green);
+  color: #fff;
+  border: none; cursor: pointer;
+  transition: 80ms;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+}
+.btn-checkin:active { transform: scale(0.97); }
+.btn-checkin:disabled { background: var(--c-dim); cursor: not-allowed; }
+.btn-cancel-checkin {
+  height: 60px;
+  padding: 0 1.2rem;
+  border-radius: 12px;
+  background: transparent;
+  border: 1px solid var(--c-border2);
+  color: var(--c-muted);
+  font-size: 0.9rem; cursor: pointer;
+}
+.btn-cancel-checkin:active { background: var(--c-surface); }
+
+/* Stats bar */
+.stats-bar {
+  display: flex; gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  background: var(--c-bg2);
+  border-top: 1px solid var(--c-border);
+  font-size: 0.78rem;
+}
+.stat-item {
+  display: flex; flex-direction: column; align-items: center; gap: 1px; flex: 1;
+}
+.stat-val { font-size: 1.1rem; font-weight: 700; }
+.stat-label { color: var(--c-muted); font-size: 0.65rem; letter-spacing: 0.06em; }
+
+/* Empty state */
+.scan-hint {
+  display: flex; flex-direction: column; align-items: center;
+  gap: 0.5rem; padding: 2rem 1rem;
+  color: var(--c-dim); text-align: center;
+}
+.scan-hint-icon { font-size: 2rem; }
+
+/* Event select */
+.event-select-screen {
+  flex: 1; display: flex; flex-direction: column;
+  padding: 1.5rem;
+}
+.event-select-screen h2 { font-size: 1.1rem; margin-bottom: 1rem; }
+.event-btn {
+  display: flex; flex-direction: column; gap: 2px;
+  padding: 1rem 1.1rem;
+  background: var(--c-surface); border: 1px solid var(--c-border);
+  border-radius: var(--radius); margin-bottom: 0.6rem;
+  cursor: pointer; text-align: left; width: 100%;
+  color: var(--c-text);
+}
+.event-btn:hover { border-color: var(--c-accent); }
+.event-btn-title { font-weight: 600; font-size: 0.95rem; }
+.event-btn-meta { font-size: 0.78rem; color: var(--c-muted); }
+</style>
+</head>
+<body>
+
+<header class="header">
+  <div class="header-inner">
+    <a href="/" class="logo">JAZZIN</a>
+    <div style="display:flex;gap:0.5rem;align-items:center">
+      <span id="event-name-header" style="font-size:0.8rem;color:var(--c-muted)"></span>
+      <button class="btn btn-ghost btn-sm" id="btn-change-event" style="display:none">変更</button>
+      <a href="/admin/login.html" class="btn btn-ghost btn-sm" id="btn-login">ログイン</a>
+    </div>
+  </div>
+</header>
+
+<div id="toast"></div>
+
+<div class="checkin-layout">
+
+  <!-- Event selection screen -->
+  <div id="event-select-screen" class="event-select-screen" style="display:none">
+    <h2>受付するイベントを選択</h2>
+    <div id="event-list"></div>
+  </div>
+
+  <!-- Main checkin UI -->
+  <div id="checkin-main" style="display:none;flex:1;flex-direction:column;display:none">
+
+    <!-- Camera -->
+    <div class="camera-zone">
+      <div id="reader"></div>
+      <div class="scan-overlay">
+        <div class="scan-frame">
+          <div class="scan-line"></div>
+        </div>
+      </div>
+      <div class="scan-status" id="scan-status">QRコードを枠内に合わせてください</div>
+    </div>
+
+    <!-- Result -->
+    <div class="result-zone" id="result-zone">
+      <div class="scan-hint" id="scan-hint">
+        <div class="scan-hint-icon">📷</div>
+        <p>QRをスキャンすると<br>情報がここに表示されます</p>
+      </div>
+      <div id="guest-display" style="display:none"></div>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats-bar">
+      <div class="stat-item">
+        <div class="stat-val" id="stat-checked">0</div>
+        <div class="stat-label">入場済</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-val" id="stat-total">0</div>
+        <div class="stat-label">予約数</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-val" id="stat-remaining">0</div>
+        <div class="stat-label">未入場</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-val" id="stat-cash">¥0</div>
+        <div class="stat-label">回収額</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Auth required -->
+  <div id="auth-required" style="flex:1;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:1rem;padding:2rem;text-align:center">
+    <p style="font-size:1.1rem;font-weight:600">受付モード</p>
+    <p style="color:var(--c-muted);font-size:0.875rem">受付スタッフはログインが必要です</p>
+    <a href="/admin/login.html" class="btn btn-primary">ログインする</a>
+  </div>
+
+</div>
+
+<script type="module">
+import { supabase, processCheckin, completeCheckin, formatDate, formatPrice } from '/core/supabase.js';
+
+let currentEvent = null;
+let scanner      = null;
+let lastScanned  = '';
+let lastScannedAt = 0;
+let pendingRsv   = null;
+let stats        = { checked: 0, total: 0, cash: 0 };
+
+const RESCAN_COOLDOWN = 1000; // 1秒同一QR無視
+
+function showToast(msg, ms=2000) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), ms);
+}
+
+// ── Auth check ───────────────────────────────────────────────
+async function checkAuth() {
+  const { data } = await supabase.auth.getUser();
+  if (!data?.user) {
+    document.getElementById('auth-required').style.display = 'flex';
+    return false;
+  }
+  document.getElementById('auth-required').style.display = 'none';
+  document.getElementById('btn-login').style.display = 'none';
+  return true;
+}
+
+// ── Load events ──────────────────────────────────────────────
+async function loadEvents() {
+  const { data } = await supabase
+    .from('events')
+    .select('id, title, event_at, venue_name')
+    .in('status', ['published','ended'])
+    .order('event_at', { ascending: false })
+    .limit(10);
+  return data || [];
+}
+
+async function selectEvent(ev) {
+  currentEvent = ev;
+  document.getElementById('event-select-screen').style.display = 'none';
+  document.getElementById('event-name-header').textContent = ev.title;
+  document.getElementById('btn-change-event').style.display = 'inline-flex';
+
+  const main = document.getElementById('checkin-main');
+  main.style.display = 'flex';
+  main.style.flexDirection = 'column';
+  main.style.flex = '1';
+
+  await loadStats();
+  startScanner();
+}
+
+// ── Stats ────────────────────────────────────────────────────
+async function loadStats() {
+  if (!currentEvent) return;
+  const { data: total } = await supabase
+    .from('reservations')
+    .select('id, num_seats', { count: 'exact' })
+    .eq('event_id', currentEvent.id);
+
+  const { data: checked } = await supabase
+    .from('checkins')
+    .select('reservation_id', { count: 'exact' })
+    .eq('event_id', currentEvent.id);
+
+  const { data: paid } = await supabase
+    .from('reservations')
+    .select('num_seats')
+    .eq('event_id', currentEvent.id)
+    .eq('payment_status', 'paid_cash');
+
+  const ticketPrice = await supabase
+    .from('events')
+    .select('ticket_price')
+    .eq('id', currentEvent.id)
+    .single();
+
+  const price = ticketPrice.data?.ticket_price || 500;
+  const totalPeople = (total || []).reduce((s,r) => s + r.num_seats, 0);
+  const checkedCount = checked?.length || 0;
+  const cashSeats = (paid || []).reduce((s,r) => s + r.num_seats, 0);
+
+  stats = { checked: checkedCount, total: totalPeople, cash: cashSeats * price };
+  updateStatsUI();
+
+  // Realtime stats
+  supabase.channel(`checkin-stats-${currentEvent.id}`)
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'checkins', filter: `event_id=eq.${currentEvent.id}` }, () => {
+      stats.checked++;
+      updateStatsUI();
+    })
+    .subscribe();
+}
+
+function updateStatsUI() {
+  document.getElementById('stat-checked').textContent  = stats.checked;
+  document.getElementById('stat-total').textContent    = stats.total;
+  document.getElementById('stat-remaining').textContent = Math.max(0, stats.total - stats.checked);
+  document.getElementById('stat-cash').textContent     = formatPrice(stats.cash);
+}
+
+// ── QR Scanner ───────────────────────────────────────────────
+function startScanner() {
+  scanner = new Html5Qrcode('reader');
+  const config = {
+    fps: 15,
+    qrbox: { width: 200, height: 200 },
+    aspectRatio: 1.0,
+    disableFlip: false,
+  };
+
+  scanner.start(
+    { facingMode: 'environment' },
+    config,
+    onQRSuccess,
+    () => {} // suppress frequent errors
+  ).catch(err => {
+    document.getElementById('scan-status').textContent = 'カメラを起動できません';
+    console.error(err);
+  });
+}
+
+async function onQRSuccess(decodedText) {
+  const now = Date.now();
+  // 同一QR 1秒無視
+  if (decodedText === lastScanned && now - lastScannedAt < RESCAN_COOLDOWN) return;
+  lastScanned   = decodedText;
+  lastScannedAt = now;
+
+  document.getElementById('scan-status').textContent = '読み取り中...';
+
+  try {
+    const result = await processCheckin(decodedText);
+    document.getElementById('scan-hint').style.display = 'none';
+    document.getElementById('guest-display').style.display = 'block';
+
+    if (!result.success) {
+      renderError(result);
+      return;
+    }
+    pendingRsv = result;
+    renderGuest(result);
+    document.getElementById('scan-status').textContent = '✓ QRを読み取りました';
+  } catch (err) {
+    renderError({ error: 'network_error' });
+  }
+}
+
+// ── Render guest info ────────────────────────────────────────
+function renderGuest(rsv) {
+  const seats = Array.isArray(rsv.seats)
+    ? rsv.seats.map(s => s.label).join(' / ')
+    : '--';
+  const total = (rsv.ticket_price || 500) * rsv.num_seats;
+
+  document.getElementById('guest-display').innerHTML = `
+    <div class="guest-card state-ready">
+      <div class="g-name">${rsv.guest_name}</div>
+      <div class="g-seats">${seats}</div>
+      <div class="g-meta">
+        <span>${rsv.num_seats}名</span>
+        <span>受付番号: ${rsv.reservation_code}</span>
+        <span style="color:${rsv.payment_status === 'paid_cash' ? 'var(--c-green)' : 'var(--c-muted)'}">
+          ${rsv.payment_status === 'paid_cash' ? '支払済' : '未払い'}
+        </span>
+      </div>
+      <div>
+        <div class="g-price-label">現金受取額</div>
+        <div class="g-price">${formatPrice(total)}</div>
+      </div>
+      <div class="action-row" style="margin-top:1rem">
+        <button class="btn-checkin" id="btn-complete-checkin">
+          ✓ 受付完了
+        </button>
+        <button class="btn-cancel-checkin" id="btn-cancel">キャンセル</button>
+      </div>
+    </div>`;
+
+  document.getElementById('btn-complete-checkin').addEventListener('click', doCheckin);
+  document.getElementById('btn-cancel').addEventListener('click', resetUI);
+}
+
+function renderError(result) {
+  let msg = 'エラーが発生しました';
+  if (result.error === 'qr_not_found') msg = '無効なQRコードです';
+  else if (result.error === 'already_checked_in') msg = `${result.guest_name} — 入場済みです`;
+  else if (result.error === 'network_error') msg = '通信エラー。再スキャンしてください';
+
+  document.getElementById('guest-display').innerHTML = `
+    <div class="guest-card state-error">
+      <div style="font-size:1.3rem;font-weight:700;color:var(--c-red);margin-bottom:0.5rem">⚠ ${msg}</div>
+      ${result.reservation_code ? `<div class="g-meta"><span>受付番号: ${result.reservation_code}</span></div>` : ''}
+      <button class="btn-cancel-checkin" style="margin-top:0.75rem;width:100%;height:48px" id="btn-cancel">閉じる</button>
+    </div>`;
+  document.getElementById('btn-cancel').addEventListener('click', resetUI);
+}
+
+// ── Complete checkin ─────────────────────────────────────────
+async function doCheckin() {
+  if (!pendingRsv) return;
+  const btn = document.getElementById('btn-complete-checkin');
+  btn.disabled = true;
+  btn.textContent = '処理中...';
+
+  try {
+    const res = await completeCheckin(pendingRsv.reservation_id);
+    if (!res.success) throw new Error('failed');
+
+    stats.cash += (pendingRsv.ticket_price || 500) * pendingRsv.num_seats;
+    updateStatsUI();
+
+    // Show done state
+    const card = document.querySelector('.guest-card');
+    if (card) {
+      card.className = 'guest-card state-done';
+      card.querySelector('.action-row').innerHTML =
+        `<div class="g-badge-paid" style="font-size:1rem;padding:0.6rem 1rem">✓ 入場完了</div>`;
+    }
+
+    // Auto-reset after 1.5s → next scan
+    setTimeout(resetUI, 1500);
+
+  } catch (err) {
+    showToast('エラー: もう一度スキャンしてください', 2500);
+    btn.disabled = false;
+    btn.textContent = '✓ 受付完了';
+  }
+}
+
+function resetUI() {
+  pendingRsv = null;
+  document.getElementById('guest-display').style.display = 'none';
+  document.getElementById('guest-display').innerHTML = '';
+  document.getElementById('scan-hint').style.display = 'flex';
+  document.getElementById('scan-status').textContent = 'QRコードを枠内に合わせてください';
+  lastScanned = '';
+}
+
+// ── Init ─────────────────────────────────────────────────────
+async function init() {
+  const authed = await checkAuth();
+  if (!authed) return;
+
+  const events = await loadEvents();
+  if (events.length === 0) {
+    showToast('公開中のイベントがありません');
+    return;
+  }
+  if (events.length === 1) {
+    selectEvent(events[0]);
+    return;
+  }
+
+  // Show event selector
+  document.getElementById('event-select-screen').style.display = 'flex';
+  const list = document.getElementById('event-list');
+  events.forEach(ev => {
+    const btn = document.createElement('button');
+    btn.className = 'event-btn';
+    btn.innerHTML = `
+      <div class="event-btn-title">${ev.title}</div>
+      <div class="event-btn-meta">${formatDate(ev.event_at)} — ${ev.venue_name}</div>`;
+    btn.addEventListener('click', () => selectEvent(ev));
+    list.appendChild(btn);
+  });
+
+  document.getElementById('btn-change-event').addEventListener('click', () => {
+    if (scanner) scanner.stop().catch(() => {});
+    document.getElementById('checkin-main').style.display = 'none';
+    document.getElementById('event-select-screen').style.display = 'flex';
+    document.getElementById('event-name-header').textContent = '';
+    document.getElementById('btn-change-event').style.display = 'none';
+    resetUI();
+  });
+}
+
+init();
+</script>
+</body>
+</html>
