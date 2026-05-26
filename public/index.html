@@ -3,47 +3,59 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<meta name="theme-color" content="#0a0a0a">
+<meta name="theme-color" content="#000a10">
 <title>JAZZIN — ライブイベント</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%23000810'/><text x='50%25' y='72%25' font-family='serif' font-size='20' fill='%2300d4ff' text-anchor='middle' font-weight='bold'>J</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Cormorant+Garamond:ital,wght@1,300&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="/config.js"></script>
 <link rel="stylesheet" href="/ui/style.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <style>
-.hero {
-  padding: 3rem 0 2rem;
-  text-align: center;
+.hero { padding: 4rem 0 2.5rem; text-align: center; position: relative; z-index: 1; }
+.hero-logo {
+  font-family: var(--font-display);
+  font-size: clamp(3.5rem, 12vw, 7rem);
+  letter-spacing: 0.14em; line-height: 1;
+  background: var(--grad-text);
+  background-size: 200% 200%;
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  background-clip: text;
+  filter: drop-shadow(0 0 40px rgba(0,212,255,0.25));
+  animation: shimmer 6s ease infinite;
+  margin-bottom: 0.3rem;
 }
-.hero-eyebrow {
-  font-size: 0.72rem; font-weight: 600;
-  letter-spacing: 0.25em; color: var(--c-accent);
-  margin-bottom: 0.6rem;
+@keyframes shimmer { 0%,100%{background-position:0% 50%} 50%{background-position:100% 50%} }
+.hero-tagline {
+  font-family: var(--font-serif);
+  font-style: italic; font-weight: 300;
+  font-size: clamp(0.8rem, 2vw, 1rem);
+  color: rgba(200,230,245,0.45); letter-spacing: 0.2em;
+  margin-bottom: 1.5rem;
 }
-.hero-title {
-  font-size: 2.6rem; font-weight: 700;
-  letter-spacing: -0.03em;
-  line-height: 1.1;
+.hero-sub { font-size: 0.9rem; color: var(--text-sub); margin-bottom: 0; }
+.hero-line {
+  width: 120px; height: 1px; margin: 1rem auto;
+  background: linear-gradient(90deg, transparent, var(--accent-1), transparent);
 }
-.hero-sub { margin-top: 0.6rem; font-size: 1rem; }
-.section-label {
-  font-size: 0.72rem; font-weight: 600;
-  letter-spacing: 0.18em; color: var(--c-muted);
-  margin-bottom: 1rem;
-}
-.events-empty {
-  text-align: center;
-  padding: 4rem 0;
-  color: var(--c-muted);
-}
-.ticket-price-tag {
-  font-size: 0.8rem; font-weight: 600;
-  color: var(--c-accent);
-}
+.events-empty { text-align:center; padding:4rem 0; color:var(--text-sub); }
 </style>
 </head>
 <body>
 
+<!-- Aurora -->
+<div class="aurora-wrap">
+  <div class="aurora-blob"></div>
+  <div class="aurora-blob"></div>
+  <div class="aurora-blob"></div>
+</div>
+
 <header class="header">
   <div class="header-inner">
-    <a href="/" class="logo">JAZZIN</a>
+    <a href="/" class="logo">
+      <img src="/assets/jazzin_logo.png" alt="JAZZIN" height="26">
+    </a>
     <nav style="display:flex;gap:0.5rem;align-items:center">
       <a href="/admin/login.html" class="btn btn-ghost btn-sm" id="admin-link">管理者ログイン</a>
     </nav>
@@ -52,58 +64,55 @@
 
 <div id="toast"></div>
 
-<main>
+<main style="position:relative;z-index:1">
   <div class="container">
-
     <section class="hero">
-      <p class="hero-eyebrow">LIVE EVENTS</p>
-      <h1 class="hero-title">今夜の音楽を<br>予約する</h1>
+      <div class="hero-logo">JAZZIN</div>
+      <div class="hero-line"></div>
+      <p class="hero-tagline">Jazz × Passion</p>
       <p class="hero-sub">現場で現金払い。QRでスムーズ入場。</p>
     </section>
 
     <section class="page">
       <p class="section-label">開催予定のイベント</p>
       <div id="events-grid" class="events-grid">
-        <!-- skeleton -->
-        <div class="skeleton" style="height:280px;border-radius:14px"></div>
-        <div class="skeleton" style="height:280px;border-radius:14px"></div>
-        <div class="skeleton" style="height:280px;border-radius:14px"></div>
+        <div class="skeleton" style="height:280px;border-radius:18px"></div>
+        <div class="skeleton" style="height:280px;border-radius:18px"></div>
+        <div class="skeleton" style="height:280px;border-radius:18px"></div>
       </div>
       <div id="events-empty" class="events-empty" style="display:none">
-        <p style="font-size:1.5rem;margin-bottom:0.5rem">🎵</p>
+        <p style="font-size:2rem;margin-bottom:0.5rem">🎵</p>
         <p>現在公開中のイベントはありません</p>
       </div>
     </section>
-
   </div>
 </main>
 
 <script type="module">
 import { supabase, fetchPublishedEvents, formatDate, formatPrice, availabilityLabel } from '/core/supabase.js';
 
-const grid = document.getElementById('events-grid');
+const grid  = document.getElementById('events-grid');
 const empty = document.getElementById('events-empty');
 
 function renderEventCard(ev) {
   const avail = availabilityLabel(ev.seats_available, ev.capacity);
-  const dt = formatDate(ev.event_at);
-  const card = document.createElement('a');
+  const card  = document.createElement('a');
   card.className = 'event-card';
   card.href = `/event.html?id=${ev.id}`;
+  card.dataset.eventId = ev.id;
 
   const imgHtml = ev.hero_image_url
     ? `<img class="event-card-img" src="${ev.hero_image_url}" alt="${ev.title}" loading="lazy">`
     : `<div class="event-card-img-placeholder">
-         <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="1.5">
-           <circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/>
-           <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/>
+         <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="rgba(0,212,255,0.15)" stroke-width="1">
+           <path d="M9 18V5l12-2v13M9 18c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-2c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2z"/>
          </svg>
        </div>`;
 
   card.innerHTML = `
     ${imgHtml}
     <div class="event-card-body">
-      <p class="event-card-meta">${dt}</p>
+      <p class="event-card-meta">${formatDate(ev.event_at)}</p>
       <p class="event-card-title">${ev.title}</p>
       <p class="event-card-meta">📍 ${ev.venue_name}</p>
       <div class="event-card-footer">
@@ -111,19 +120,7 @@ function renderEventCard(ev) {
         <span class="ticket-price-tag">${formatPrice(ev.ticket_price)}</span>
       </div>
     </div>`;
-
-  card.dataset.eventId = ev.id;
   return card;
-}
-
-function updateCardBadge(eventId, seatsAvailable, capacity) {
-  const card = grid.querySelector(`[data-event-id="${eventId}"]`);
-  if (!card) return;
-  const badge = card.querySelector('.badge');
-  if (!badge) return;
-  const avail = availabilityLabel(seatsAvailable, capacity);
-  badge.className = `badge ${avail.cls}`;
-  badge.textContent = avail.text;
 }
 
 let eventsCache = [];
@@ -132,49 +129,32 @@ async function loadEvents() {
   try {
     eventsCache = await fetchPublishedEvents();
     grid.innerHTML = '';
-    if (eventsCache.length === 0) {
-      empty.style.display = 'block';
-      return;
-    }
+    if (!eventsCache.length) { empty.style.display = 'block'; return; }
     eventsCache.forEach(ev => grid.appendChild(renderEventCard(ev)));
 
-    // Realtime: 残席リアルタイム更新
-    const ids = eventsCache.map(e => e.id);
-    supabase
-      .channel('index-seats')
-      .on('postgres_changes', {
-        event: 'UPDATE',
-        schema: 'public',
-        table: 'seats',
-      }, payload => {
+    supabase.channel('index-seats')
+      .on('postgres_changes', { event:'UPDATE', schema:'public', table:'seats' }, payload => {
         const seat = payload.new;
-        const ev = eventsCache.find(e => e.id === seat.event_id);
+        const ev   = eventsCache.find(e => e.id === seat.event_id);
         if (!ev) return;
-        // 簡易カウント更新
-        if (seat.status === 'reserved' || seat.status === 'checked_in') {
-          ev.seats_available = Math.max(0, ev.seats_available - 1);
-          ev.seats_taken++;
-        } else if (seat.status === 'available') {
-          ev.seats_available++;
-          ev.seats_taken = Math.max(0, ev.seats_taken - 1);
-        }
-        updateCardBadge(ev.id, ev.seats_available, ev.capacity);
-      })
-      .subscribe();
-
+        if (seat.status === 'reserved' || seat.status === 'checked_in') ev.seats_available = Math.max(0, ev.seats_available - 1);
+        else if (seat.status === 'available') ev.seats_available++;
+        const card  = grid.querySelector(`[data-event-id="${ev.id}"]`);
+        if (!card) return;
+        const badge = card.querySelector('.badge');
+        const avail = availabilityLabel(ev.seats_available, ev.capacity);
+        badge.className = `badge ${avail.cls}`;
+        badge.textContent = avail.text;
+      }).subscribe();
   } catch (err) {
     console.error(err);
-    grid.innerHTML = '<p style="color:var(--c-muted);padding:2rem">読み込みに失敗しました</p>';
+    grid.innerHTML = '<p style="color:var(--text-sub);padding:2rem">読み込みに失敗しました</p>';
   }
 }
 
-// Admin link
 (async () => {
   const { data } = await supabase.auth.getUser();
-  if (data?.user) {
-    document.getElementById('admin-link').textContent = '管理画面';
-    document.getElementById('admin-link').href = '/admin/index.html';
-  }
+  if (data?.user) { const l = document.getElementById('admin-link'); l.textContent='管理画面'; l.href='/admin/index.html'; }
 })();
 
 loadEvents();

@@ -3,8 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<meta name="theme-color" content="#0a0a0a">
+<meta name="theme-color" content="#000a10">
 <title>JAZZIN — 受付</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Cormorant+Garamond:ital,wght@1,300&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/ui/style.css">
 <script src="/config.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
@@ -201,9 +204,16 @@ body { background: #0a0a0a; overflow-x: hidden; }
 </head>
 <body>
 
+<!-- Aurora -->
+<div class="aurora-wrap">
+  <div class="aurora-blob"></div>
+  <div class="aurora-blob"></div>
+  <div class="aurora-blob"></div>
+</div>
+
 <header class="header">
   <div class="header-inner">
-    <a href="/" class="logo">JAZZIN</a>
+    <a href="/" class="logo"><img src="/assets/jazzin_logo.png" alt="JAZZIN" height="26"></a>
     <div style="display:flex;gap:0.5rem;align-items:center">
       <span id="event-name-header" style="font-size:0.8rem;color:var(--c-muted)"></span>
       <button class="btn btn-ghost btn-sm" id="btn-change-event" style="display:none">変更</button>
