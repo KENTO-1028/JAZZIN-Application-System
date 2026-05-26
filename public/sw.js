@@ -1,7 +1,8 @@
-// JAZZIN Service Worker — Phase 8: PWA / オフライン耐性
-const CACHE_NAME = 'jazzin-v1';
+// JAZZIN Service Worker — シンプル版（CSP対応）
+const CACHE_NAME = 'jazzin-v2';
+
+// キャッシュする自サイトのファイルのみ
 const STATIC_ASSETS = [
-  '/',
   '/index.html',
   '/event.html',
   '/confirm.html',
@@ -9,47 +10,50 @@ const STATIC_ASSETS = [
   '/mypage.html',
   '/ui/style.css',
   '/core/supabase.js',
-  '/config.js',
-  '/assets/jazzin_logo.png',
+  '/manifest.json',
 ];
 
-// Install: 静的アセットをキャッシュ
 self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE_NAME)
-      .then(cache => cache.addAll(STATIC_ASSETS.filter(url => !url.includes('config.js'))))
+      .then(cache => cache.addAll(STATIC_ASSETS))
       .then(() => self.skipWaiting())
   );
 });
 
-// Activate: 古いキャッシュを削除
 self.addEventListener('activate', event => {
   event.waitUntil(
     caches.keys()
-      .then(keys => Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k))))
+      .then(keys => Promise.all(
+        keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k))
+      ))
       .then(() => self.clients.claim())
   );
 });
 
-// Fetch: ネットワーク優先、失敗時キャッシュにフォールバック
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
 
-  // Supabase APIはキャッシュしない
-  if (url.hostname.includes('supabase.co')) return;
-  // config.jsはキャッシュしない（常に最新を取得）
+  // 外部ドメインはすべてService Workerを通さず直接フェッチ
+  if (url.origin !== self.location.origin) return;
+
+  // config.jsは常に最新を取得
   if (url.pathname === '/config.js') return;
 
+  // 自サイトのGETリクエストのみキャッシュ戦略を適用
+  if (event.request.method !== 'GET') return;
+
   event.respondWith(
-    fetch(event.request)
-      .then(response => {
-        // 成功したレスポンスをキャッシュに保存
-        if (response.ok && event.request.method === 'GET') {
+    caches.match(event.request).then(cached => {
+      const fetchPromise = fetch(event.request).then(response => {
+        if (response.ok) {
           const clone = response.clone();
           caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
         }
         return response;
-      })
-      .catch(() => caches.match(event.request))
+      });
+      // キャッシュがあればすぐ返し、バックグラウンドで更新
+      return cached || fetchPromise;
+    })
   );
 });
