@@ -1,7 +1,6 @@
-// JAZZIN Service Worker — シンプル版（CSP対応）
-const CACHE_NAME = 'jazzin-v2';
+// JAZZIN Service Worker v3 — リダイレクト対応版
+const CACHE_NAME = 'jazzin-v3';
 
-// キャッシュする自サイトのファイルのみ
 const STATIC_ASSETS = [
   '/index.html',
   '/event.html',
@@ -34,26 +33,24 @@ self.addEventListener('activate', event => {
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
 
-  // 外部ドメインはすべてService Workerを通さず直接フェッチ
+  // 外部ドメインはスルー
   if (url.origin !== self.location.origin) return;
 
-  // config.jsは常に最新を取得
+  // config.jsは常に最新
   if (url.pathname === '/config.js') return;
 
-  // 自サイトのGETリクエストのみキャッシュ戦略を適用
+  // GETのみ
   if (event.request.method !== 'GET') return;
 
   event.respondWith(
-    caches.match(event.request).then(cached => {
-      const fetchPromise = fetch(event.request).then(response => {
-        if (response.ok) {
-          const clone = response.clone();
-          caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
-        }
+    fetch(event.request, { redirect: 'follow' })
+      .then(response => {
+        // リダイレクトされたレスポンスはキャッシュしない
+        if (!response.ok || response.type === 'opaqueredirect') return response;
+        const clone = response.clone();
+        caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
         return response;
-      });
-      // キャッシュがあればすぐ返し、バックグラウンドで更新
-      return cached || fetchPromise;
-    })
+      })
+      .catch(() => caches.match(event.request))
   );
 });

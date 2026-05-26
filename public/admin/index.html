@@ -292,7 +292,7 @@ async function loadAllEvents() {
   const sel = document.getElementById('sel-event');
   allEvents.forEach(ev => {
     const o = document.createElement('option');
-    o.value = ev.id; o.textContent = `${ev.title} (${new Date(ev.event_at).toLocaleDateString('ja-JP')})`;
+    o.value = ev.id; o.textContent = `${ev.title} (${ev.event_at ? new Date(ev.event_at).toLocaleDateString('ja-JP') : '日時未定'})`;
     sel.appendChild(o);
   });
   renderEventsList();
@@ -455,7 +455,10 @@ function openEventForm(ev) {
     // 既存イベント編集：DBの値をセット
     document.getElementById('ef-title').value      = ev.title || '';
     document.getElementById('ef-venue').value      = ev.venue_name || '';
-    document.getElementById('ef-event-at').value   = ev.event_at ? new Date(ev.event_at).toISOString().slice(0,16) : '';
+    const evAtDate = ev.event_at ? new Date(ev.event_at) : null;
+    document.getElementById('ef-event-at').value = evAtDate && !isNaN(evAtDate) ? evAtDate.toISOString().slice(0,16) : '';
+    const doorsDate = ev.doors_open_at ? new Date(ev.doors_open_at) : null;
+    document.getElementById('ef-doors-at').value = doorsDate && !isNaN(doorsDate) ? doorsDate.toISOString().slice(0,16) : '';
     document.getElementById('ef-price').value      = ev.ticket_price || 500;
     document.getElementById('ef-capacity').value   = ev.capacity || 36;
     document.getElementById('ef-status').value     = ev.status || 'draft';
