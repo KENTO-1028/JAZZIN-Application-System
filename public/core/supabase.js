@@ -156,10 +156,13 @@ export function subscribeSeats(eventId, onSeatChange) {
 
 // ── Format helpers ──────────────────────────────────────────
 export function formatDate(iso) {
+  if (!iso) return "日時未定";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "日時未定";
   return new Intl.DateTimeFormat('ja-JP', {
     year: 'numeric', month: 'long', day: 'numeric',
     weekday: 'short', hour: '2-digit', minute: '2-digit',
-  }).format(new Date(iso));
+  }).format(d);
 }
 
 export function formatPrice(yen) {
