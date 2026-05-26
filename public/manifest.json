@@ -1,0 +1,20 @@
+{
+  "name": "JAZZIN ライブ運営OS",
+  "short_name": "JAZZIN",
+  "description": "ライブイベント予約・受付管理システム",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#000a10",
+  "theme_color": "#000a10",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect width='192' height='192' rx='24' fill='%23000810'/><text x='50%25' y='72%25' font-family='serif' font-size='120' fill='%2300d4ff' text-anchor='middle' font-weight='bold'>J</text></svg>",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["entertainment", "lifestyle"],
+  "lang": "ja"
+}

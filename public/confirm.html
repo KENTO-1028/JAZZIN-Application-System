@@ -3,84 +3,90 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#000a10">
 <title>JAZZIN — 予約完了</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Cormorant+Garamond:ital,wght@1,300&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/ui/style.css">
 <script src="/config.js"></script>
+<link rel="stylesheet" href="/ui/style.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 <style>
-.confirm-page { max-width: 520px; margin: 0 auto; padding: 2rem 1.25rem 5rem; }
-.confirm-header {
-  text-align: center; margin-bottom: 2rem;
-}
+body { min-height:100dvh; }
+.confirm-page { max-width:520px; margin:0 auto; padding:2rem 1.25rem 6rem; position:relative; z-index:1; }
+.confirm-header { text-align:center; margin-bottom:2rem; }
 .check-icon {
-  width: 56px; height: 56px;
-  background: rgba(76,175,110,0.15);
-  border: 2px solid var(--c-green);
-  border-radius: 50%;
-  display: flex; align-items: center; justify-content: center;
-  margin: 0 auto 1rem;
-  font-size: 1.5rem;
+  width:60px; height:60px;
+  border:1px solid rgba(127,255,212,0.4);
+  border-radius:50%;
+  display:flex; align-items:center; justify-content:center;
+  margin:0 auto 1rem;
+  font-size:1.5rem;
+  background:rgba(127,255,212,0.08);
+  box-shadow: 0 0 30px rgba(127,255,212,0.15);
 }
+.confirm-title {
+  font-family:var(--font-display);
+  font-size:2rem; letter-spacing:0.08em;
+  background:var(--grad-text); background-size:200% 200%;
+  -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text;
+  margin-bottom:0.3rem;
+}
+.confirm-subtitle { font-family:var(--font-serif); font-style:italic; font-size:0.85rem; color:rgba(200,230,245,0.4); letter-spacing:0.15em; }
+
 .confirm-card {
-  background: var(--c-surface);
-  border: 1px solid var(--c-border);
-  border-radius: var(--radius-lg);
-  overflow: hidden;
+  background:rgba(0,25,45,0.6);
+  backdrop-filter:blur(20px);
+  border:1px solid var(--glass-border);
+  border-radius:var(--radius-lg);
+  overflow:hidden;
+  box-shadow:0 8px 40px rgba(0,0,0,0.5);
 }
 .confirm-card-header {
-  background: var(--c-bg3);
-  border-bottom: 1px solid var(--c-border);
-  padding: 1rem 1.25rem;
-  display: flex; align-items: center; justify-content: space-between;
+  background:rgba(0,10,20,0.6);
+  border-bottom:1px solid var(--glass-border);
+  padding:1.1rem 1.4rem;
+  display:flex; align-items:center; justify-content:space-between;
 }
 .confirm-code {
-  font-size: 1.4rem; font-weight: 700;
-  letter-spacing: 0.08em; color: var(--c-accent);
+  font-family:var(--font-display);
+  font-size:1.8rem; letter-spacing:0.12em;
+  background:var(--grad-text); background-size:200% 200%;
+  -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text;
 }
-.confirm-body { padding: 1.25rem; }
+.confirm-body { padding:1.25rem 1.4rem; }
 .confirm-row {
-  display: flex; justify-content: space-between;
-  padding: 0.5rem 0;
-  border-bottom: 1px solid var(--c-border);
-  font-size: 0.875rem;
+  display:flex; justify-content:space-between; align-items:baseline;
+  padding:0.55rem 0; border-bottom:1px solid rgba(100,200,255,0.06);
+  font-size:0.875rem; gap:1rem;
 }
-.confirm-row:last-child { border-bottom: none; }
-.confirm-row-label { color: var(--c-muted); }
-.confirm-row-value { color: var(--c-text); font-weight: 500; text-align: right; max-width: 60%; }
+.confirm-row:last-child { border-bottom:none; }
+.confirm-row-label { color:var(--text-sub); flex-shrink:0; }
+.confirm-row-value { color:var(--text-main); font-weight:500; text-align:right; }
 .qr-section {
-  display: flex; flex-direction: column; align-items: center;
-  gap: 0.75rem; padding: 1.5rem;
-  border-top: 1px solid var(--c-border);
-  background: var(--c-bg3);
+  display:flex; flex-direction:column; align-items:center;
+  gap:0.75rem; padding:1.5rem;
+  border-top:1px solid var(--glass-border);
+  background:rgba(0,10,20,0.4);
 }
-.qr-note { font-size: 0.75rem; color: var(--c-muted); text-align: center; }
-.actions { display: flex; flex-direction: column; gap: 0.75rem; margin-top: 1.5rem; }
+.qr-note { font-size:0.72rem; color:var(--text-sub); text-align:center; letter-spacing:0.05em; }
+.actions { display:flex; flex-direction:column; gap:0.75rem; margin-top:1.5rem; }
 .notice {
-  background: rgba(232,201,122,0.08);
-  border: 1px solid rgba(232,201,122,0.2);
-  border-radius: var(--radius);
-  padding: 1rem;
-  font-size: 0.82rem;
-  color: var(--c-muted);
-  line-height: 1.7;
+  background:rgba(0,212,255,0.05);
+  border:1px solid rgba(0,212,255,0.15);
+  border-radius:var(--radius);
+  padding:1rem 1.1rem;
+  font-size:0.82rem; color:var(--text-sub); line-height:1.8;
+  margin-top:1rem;
 }
-.notice strong { color: var(--c-accent); }
-/* Capture target */
-#capture-target {
-  background: var(--c-bg2);
-  padding: 1.5rem;
-  border-radius: var(--radius-lg);
-}
+.notice strong { color:var(--accent-1); }
 </style>
 </head>
 <body>
 
-<!-- Aurora -->
 <div class="aurora-wrap">
   <div class="aurora-blob"></div>
   <div class="aurora-blob"></div>
@@ -96,56 +102,51 @@
 <div id="toast"></div>
 
 <div class="confirm-page">
-  <div id="loading" style="text-align:center;padding:3rem 0">
+  <div id="loading" style="text-align:center;padding:4rem 0">
     <div class="spinner" style="margin:0 auto"></div>
     <p style="margin-top:1rem;font-size:0.875rem">予約情報を取得中...</p>
   </div>
-  <div id="main-content" style="display:none">
 
+  <div id="main-content" style="display:none">
     <div class="confirm-header">
       <div class="check-icon">✓</div>
-      <h1 style="font-size:1.5rem;margin-bottom:0.3rem">予約が完了しました</h1>
-      <p style="font-size:0.875rem">確認メールを送信しました</p>
+      <div class="confirm-title">予約完了</div>
+      <p class="confirm-subtitle">Reservation Confirmed</p>
     </div>
 
     <div id="capture-target" class="confirm-card">
       <div class="confirm-card-header">
         <div>
-          <div style="font-size:0.65rem;letter-spacing:0.15em;color:var(--c-muted);margin-bottom:2px">受付番号</div>
+          <div style="font-size:0.62rem;letter-spacing:0.18em;color:var(--text-sub);margin-bottom:3px">RESERVATION NO.</div>
           <div class="confirm-code" id="rsv-code">--</div>
         </div>
         <div style="text-align:right">
-          <div style="font-size:0.65rem;letter-spacing:0.15em;color:var(--c-muted);margin-bottom:2px">支払い</div>
-          <div style="font-size:0.8rem;color:var(--c-muted)">当日現金払い</div>
+          <div style="font-size:0.62rem;letter-spacing:0.12em;color:var(--text-sub);margin-bottom:3px">PAYMENT</div>
+          <div style="font-size:0.8rem;color:var(--text-sub)">当日現金払い</div>
         </div>
       </div>
-
-      <div class="confirm-body" id="rsv-details">
-        <!-- filled by JS -->
-      </div>
-
+      <div class="confirm-body" id="rsv-details"></div>
       <div class="qr-section">
         <div class="qr-box" id="qr-container"></div>
-        <p class="qr-note">当日このQRコードを受付で提示してください</p>
+        <p class="qr-note">受付でこのQRコードをご提示ください</p>
       </div>
     </div>
 
-    <div class="notice" style="margin-top:1rem">
+    <div class="notice">
       <strong>当日の流れ</strong><br>
       ① QRコードを受付スタッフに提示<br>
       ② 現金でチケット料金をお支払い<br>
-      ③ 入場・お席へどうぞ<br>
-      <br>
-      <strong>注意：</strong> QRの提示だけでは入場できません。必ず現金支払い後に入場となります。
+      ③ 入場・お席へどうぞ<br><br>
+      <strong>注意：</strong> QR提示のみでは入場できません。必ず現金支払い後に入場となります。
     </div>
 
     <div class="actions">
-      <button class="btn btn-primary btn-full" id="btn-save">📥 画像として保存</button>
+      <button class="btn btn-primary btn-full btn-lg" id="btn-save">📥 画像として保存</button>
       <a id="btn-calendar" href="#" class="btn btn-ghost btn-full" target="_blank">📅 カレンダーに追加</a>
       <a id="btn-map" href="#" class="btn btn-ghost btn-full" target="_blank" style="display:none">🗺 会場をGoogle Mapで開く</a>
+      <a href="/mypage.html" class="btn btn-ghost btn-full">🎫 予約マイページ</a>
       <a href="/" class="btn btn-ghost btn-full">← イベント一覧へ</a>
     </div>
-
   </div>
 </div>
 
@@ -163,80 +164,112 @@ function showToast(msg, ms=2000) {
   setTimeout(() => t.classList.remove('show'), ms);
 }
 
-async function loadReservation() {
-  // Fetch reservation with seats and event
-  const { data: rsv, error } = await supabase
-    .from('reservations')
-    .select(`
-      id, reservation_code, guest_name, guest_email, num_seats, ticket_price:events(ticket_price),
-      event:events(id, title, event_at, venue_name, venue_address, notes),
-      reservation_seats(seat:seats(label))
-    `)
-    .eq('id', RESERVATION_ID)
-    .single();
+// Phase 7: EmailJS初期化
+if (window.__JAZZIN_EMAILJS_PUBLIC_KEY__) {
+  emailjs.init(window.__JAZZIN_EMAILJS_PUBLIC_KEY__);
+}
 
-  if (error || !rsv) {
-    // Fallback: use URL params only
-    document.getElementById('loading').style.display = 'none';
-    document.getElementById('main-content').style.display = 'block';
+async function sendConfirmEmail({ toEmail, toName, eventTitle, eventAt, venueName, seats, numSeats, price, reservationCode, notes }) {
+  if (!window.__JAZZIN_EMAILJS_SERVICE_ID__ || !window.__JAZZIN_EMAILJS_TEMPLATE_ID__) return;
+  try {
+    await emailjs.send(
+      window.__JAZZIN_EMAILJS_SERVICE_ID__,
+      window.__JAZZIN_EMAILJS_TEMPLATE_ID__,
+      {
+        to_email:         toEmail,
+        to_name:          toName,
+        event_title:      eventTitle,
+        event_at:         formatDate(eventAt),
+        venue_name:       venueName,
+        seats:            seats,
+        num_seats:        numSeats,
+        price:            formatPrice(price * numSeats),
+        reservation_code: reservationCode,
+        notes:            notes || '',
+      }
+    );
+    console.log('確認メール送信完了');
+  } catch (err) {
+    console.warn('メール送信失敗:', err);
+  }
+}
+
+async function loadReservation() {
+  try {
+    const { data: rsv, error } = await supabase
+      .from('reservations')
+      .select(`id, reservation_code, guest_name, guest_email, num_seats,
+        event:events(id, title, event_at, venue_name, venue_address, ticket_price, notes),
+        reservation_seats(seat:seats(label))`)
+      .eq('id', RESERVATION_ID)
+      .single();
+
+    if (error || !rsv) throw new Error('not found');
+
+    const ev    = rsv.event;
+    const seats = rsv.reservation_seats.map(rs => rs.seat?.label).filter(Boolean).join('、');
+    const price = ev?.ticket_price || 500;
+
+    document.getElementById('rsv-code').textContent = rsv.reservation_code;
+    document.getElementById('rsv-details').innerHTML = `
+      ${ev ? `
+      <div class="confirm-row"><span class="confirm-row-label">イベント</span><span class="confirm-row-value">${ev.title}</span></div>
+      <div class="confirm-row"><span class="confirm-row-label">日時</span><span class="confirm-row-value">${formatDate(ev.event_at)}</span></div>
+      <div class="confirm-row"><span class="confirm-row-label">会場</span><span class="confirm-row-value">${ev.venue_name}</span></div>` : ''}
+      <div class="confirm-row"><span class="confirm-row-label">お名前</span><span class="confirm-row-value">${rsv.guest_name}</span></div>
+      <div class="confirm-row"><span class="confirm-row-label">座席</span><span class="confirm-row-value">${seats}</span></div>
+      <div class="confirm-row"><span class="confirm-row-label">人数</span><span class="confirm-row-value">${rsv.num_seats} 名</span></div>
+      <div class="confirm-row">
+        <span class="confirm-row-label">料金（当日現金）</span>
+        <span class="confirm-row-value" style="color:var(--accent-1);font-weight:600">${formatPrice(price * rsv.num_seats)}</span>
+      </div>`;
+
+    if (ev?.venue_address) {
+      const mapBtn = document.getElementById('btn-map');
+      mapBtn.href = `https://maps.google.com/?q=${encodeURIComponent(ev.venue_address)}`;
+      mapBtn.style.display = 'flex';
+    }
+
+    if (ev?.event_at) {
+      const start = new Date(ev.event_at);
+      const end   = new Date(start.getTime() + 3*60*60*1000);
+      const fmt   = d => d.toISOString().replace(/[-:]/g,'').replace(/\.\d+/,'');
+      document.getElementById('btn-calendar').href =
+        `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(ev.title)}&dates=${fmt(start)}/${fmt(end)}&location=${encodeURIComponent(ev.venue_name||'')}`;
+    }
+
+    renderQR(QR_TOKEN);
+
+    // Phase 7: 予約確認メール送信（初回のみ）
+    const mailSentKey = `mail_sent_${RESERVATION_ID}`;
+    if (!sessionStorage.getItem(mailSentKey)) {
+      sessionStorage.setItem(mailSentKey, '1');
+      sendConfirmEmail({
+        toEmail:         rsv.guest_email,
+        toName:          rsv.guest_name,
+        eventTitle:      ev?.title || '',
+        eventAt:         ev?.event_at || '',
+        venueName:       ev?.venue_name || '',
+        seats,
+        numSeats:        rsv.num_seats,
+        price,
+        reservationCode: rsv.reservation_code,
+        notes:           ev?.notes || '',
+      });
+    }
+
+    // マイページ用にlocalStorageへ保存
+    const myRsvs = JSON.parse(localStorage.getItem('jazzin_myreservations') || '[]');
+    if (!myRsvs.find(r => r.id === RESERVATION_ID)) {
+      myRsvs.push({ id: RESERVATION_ID, token: QR_TOKEN, code: rsv.reservation_code, createdAt: new Date().toISOString() });
+      localStorage.setItem('jazzin_myreservations', JSON.stringify(myRsvs.slice(-10)));
+    }
+
+  } catch {
+    // フォールバック: URLパラメータのみ
     document.getElementById('rsv-code').textContent = RSV_CODE || '--';
     renderQR(QR_TOKEN);
-    return;
   }
-
-  const ev    = rsv.event;
-  const seats = rsv.reservation_seats.map(rs => rs.seat.label).join('、');
-  const price = ev ? rsv.ticket_price?.ticket_price || 500 : 500;
-
-  document.getElementById('rsv-code').textContent = rsv.reservation_code;
-  document.getElementById('rsv-details').innerHTML = `
-    ${ev ? `<div class="confirm-row">
-      <span class="confirm-row-label">イベント</span>
-      <span class="confirm-row-value">${ev.title}</span>
-    </div>
-    <div class="confirm-row">
-      <span class="confirm-row-label">日時</span>
-      <span class="confirm-row-value">${formatDate(ev.event_at)}</span>
-    </div>
-    <div class="confirm-row">
-      <span class="confirm-row-label">会場</span>
-      <span class="confirm-row-value">${ev.venue_name}</span>
-    </div>` : ''}
-    <div class="confirm-row">
-      <span class="confirm-row-label">お名前</span>
-      <span class="confirm-row-value">${rsv.guest_name}</span>
-    </div>
-    <div class="confirm-row">
-      <span class="confirm-row-label">座席</span>
-      <span class="confirm-row-value">${seats}</span>
-    </div>
-    <div class="confirm-row">
-      <span class="confirm-row-label">人数</span>
-      <span class="confirm-row-value">${rsv.num_seats} 名</span>
-    </div>
-    <div class="confirm-row">
-      <span class="confirm-row-label">料金（当日現金）</span>
-      <span class="confirm-row-value" style="color:var(--c-accent);font-weight:700">${formatPrice(price * rsv.num_seats)}</span>
-    </div>
-  `;
-
-  // Map link
-  if (ev?.venue_address) {
-    const mapBtn = document.getElementById('btn-map');
-    mapBtn.href = `https://maps.google.com/?q=${encodeURIComponent(ev.venue_address)}`;
-    mapBtn.style.display = 'flex';
-  }
-
-  // Calendar link
-  if (ev?.event_at) {
-    const start = new Date(ev.event_at);
-    const end   = new Date(start.getTime() + 3 * 60 * 60 * 1000);
-    const fmt = d => d.toISOString().replace(/[-:]/g,'').replace(/\.\d+/,'');
-    document.getElementById('btn-calendar').href =
-      `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(ev.title)}&dates=${fmt(start)}/${fmt(end)}&location=${encodeURIComponent(ev.venue_name||'')}`;
-  }
-
-  renderQR(QR_TOKEN);
 
   document.getElementById('loading').style.display = 'none';
   document.getElementById('main-content').style.display = 'block';
@@ -245,38 +278,27 @@ async function loadReservation() {
 function renderQR(token) {
   const container = document.getElementById('qr-container');
   container.innerHTML = '';
-  // QR encodes only the UUID token — no personal data
   new QRCode(container, {
-    text: token,
-    width: 200, height: 200,
-    colorDark: '#000000',
-    colorLight: '#ffffff',
+    text: token, width:200, height:200,
+    colorDark:'#000000', colorLight:'#ffffff',
     correctLevel: QRCode.CorrectLevel.M,
   });
 }
 
-// Save as PNG
 document.getElementById('btn-save').addEventListener('click', async () => {
   const btn = document.getElementById('btn-save');
-  btn.disabled = true;
-  btn.textContent = '保存中...';
+  btn.disabled = true; btn.textContent = '保存中...';
   try {
-    const el = document.getElementById('capture-target');
-    const canvas = await html2canvas(el, {
-      backgroundColor: '#111111',
-      scale: 2,
-      logging: false,
+    const canvas = await html2canvas(document.getElementById('capture-target'), {
+      backgroundColor:'#000d16', scale:2, logging:false,
     });
-    const link = document.createElement('a');
-    link.download = `jazzin-${RSV_CODE || 'ticket'}.png`;
-    link.href = canvas.toDataURL('image/png');
-    link.click();
+    const a = document.createElement('a');
+    a.download = `jazzin-${RSV_CODE||'ticket'}.png`;
+    a.href = canvas.toDataURL('image/png');
+    a.click();
     showToast('画像を保存しました');
-  } catch {
-    showToast('保存に失敗しました');
-  }
-  btn.disabled = false;
-  btn.textContent = '📥 画像として保存';
+  } catch { showToast('保存に失敗しました'); }
+  btn.disabled = false; btn.textContent = '📥 画像として保存';
 });
 
 loadReservation();

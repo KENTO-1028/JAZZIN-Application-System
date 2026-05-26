@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#000a10">
+<title>JAZZIN — 予約マイページ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Cormorant+Garamond:ital,wght@1,300&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="/config.js"></script>
+<link rel="stylesheet" href="/ui/style.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+body { min-height:100dvh; }
+.mypage { max-width:600px; margin:0 auto; padding:2rem 1.25rem 5rem; position:relative; z-index:1; }
+.page-title {
+  font-family:var(--font-display);
+  font-size:2.2rem; letter-spacing:0.1em;
+  background:var(--grad-text); background-size:200% 200%;
+  -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text;
+  margin-bottom:0.3rem;
+}
+.page-sub { font-family:var(--font-serif); font-style:italic; font-size:0.82rem; color:rgba(200,230,245,0.4); letter-spacing:0.15em; margin-bottom:2rem; }
+.rsv-card {
+  background:rgba(0,25,45,0.55);
+  backdrop-filter:blur(20px);
+  border:1px solid var(--glass-border);
+  border-radius:var(--radius-lg);
+  overflow:hidden;
+  margin-bottom:1rem;
+  transition:border-color 200ms;
+}
+.rsv-card:hover { border-color:rgba(0,212,255,0.25); }
+.rsv-card-header {
+  display:flex; justify-content:space-between; align-items:center;
+  padding:0.9rem 1.2rem;
+  border-bottom:1px solid var(--glass-border);
+  background:rgba(0,10,20,0.4);
+  cursor:pointer;
+}
+.rsv-code { font-family:var(--font-display); font-size:1.3rem; letter-spacing:0.1em; color:var(--accent-1); }
+.rsv-status-badge { font-size:0.7rem; }
+.rsv-body { padding:1rem 1.2rem; }
+.rsv-row { display:flex; justify-content:space-between; font-size:0.85rem; padding:0.4rem 0; border-bottom:1px solid rgba(100,200,255,0.05); }
+.rsv-row:last-child { border-bottom:none; }
+.rsv-row-label { color:var(--text-sub); }
+.rsv-row-value { color:var(--text-main); font-weight:500; }
+.qr-section { padding:1.2rem; border-top:1px solid var(--glass-border); display:flex; flex-direction:column; align-items:center; gap:0.6rem; background:rgba(0,10,20,0.3); }
+.empty-state { text-align:center; padding:4rem 0; color:var(--text-sub); }
+.empty-icon { font-size:2.5rem; margin-bottom:1rem; }
+
+/* 検索フォーム */
+.search-form {
+  background:rgba(0,25,45,0.55);
+  backdrop-filter:blur(20px);
+  border:1px solid var(--glass-border);
+  border-radius:var(--radius-lg);
+  padding:1.25rem;
+  margin-bottom:1.5rem;
+}
+.search-title { font-size:0.72rem; letter-spacing:0.15em; color:var(--text-sub); margin-bottom:0.75rem; font-family:var(--font-display); }
+.search-row { display:flex; gap:0.75rem; }
+</style>
+</head>
+<body>
+
+<div class="aurora-wrap">
+  <div class="aurora-blob"></div>
+  <div class="aurora-blob"></div>
+  <div class="aurora-blob"></div>
+</div>
+
+<header class="header">
+  <div class="header-inner">
+    <a href="/" class="logo"><img src="/assets/jazzin_logo.png" alt="JAZZIN" height="26"></a>
+    <a href="/" class="btn btn-ghost btn-sm">← 一覧</a>
+  </div>
+</header>
+
+<div id="toast"></div>
+
+<div class="mypage">
+  <div class="page-title">MY TICKETS</div>
+  <p class="page-sub">予約の確認・QR再表示</p>
+
+  <!-- メールで検索 -->
+  <div class="search-form">
+    <p class="search-title">予約番号またはメールで検索</p>
+    <div class="search-row">
+      <input type="text" class="form-input" id="search-input" placeholder="A-001 または メールアドレス" style="flex:1">
+      <button class="btn btn-primary" id="btn-search">検索</button>
+    </div>
+  </div>
+
+  <div id="rsv-list"></div>
+</div>
+
+<script type="module">
+import { supabase, formatDate, formatPrice } from '/core/supabase.js';
+
+function showToast(msg, ms=2000) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), ms);
+}
+
+const list = document.getElementById('rsv-list');
+
+function renderCard(rsv, expanded = false) {
+  const ev     = rsv.event;
+  const seats  = rsv.reservation_seats?.map(rs => rs.seat?.label).filter(Boolean).join('、') || '--';
+  const price  = ev?.ticket_price || 500;
+  const isChecked = rsv.checkins?.length > 0;
+  const isPaid    = rsv.payment_status === 'paid_cash';
+
+  const card = document.createElement('div');
+  card.className = 'rsv-card';
+  card.dataset.id = rsv.id;
+
+  card.innerHTML = `
+    <div class="rsv-card-header" data-toggle="${rsv.id}">
+      <div>
+        <div class="rsv-code">${rsv.reservation_code}</div>
+        <div style="font-size:0.75rem;color:var(--text-sub);margin-top:2px">${ev?.title || ''}</div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
+        <span class="badge rsv-status-badge ${isChecked ? 'badge-ok' : 'badge-few'}">${isChecked ? '入場済' : '未入場'}</span>
+        <span class="badge rsv-status-badge ${isPaid ? 'badge-ok' : 'badge-sold'}">${isPaid ? '支払済' : '当日払い'}</span>
+      </div>
+    </div>
+    <div class="rsv-body" id="body-${rsv.id}" style="${expanded ? '' : 'display:none'}">
+      ${ev ? `
+      <div class="rsv-row"><span class="rsv-row-label">日時</span><span class="rsv-row-value">${formatDate(ev.event_at)}</span></div>
+      <div class="rsv-row"><span class="rsv-row-label">会場</span><span class="rsv-row-value">${ev.venue_name}</span></div>` : ''}
+      <div class="rsv-row"><span class="rsv-row-label">座席</span><span class="rsv-row-value">${seats}</span></div>
+      <div class="rsv-row"><span class="rsv-row-label">人数</span><span class="rsv-row-value">${rsv.num_seats} 名</span></div>
+      <div class="rsv-row"><span class="rsv-row-label">料金</span><span class="rsv-row-value" style="color:var(--accent-1)">${formatPrice(price * rsv.num_seats)}</span></div>
+    </div>
+    <div class="qr-section" id="qr-${rsv.id}" style="${expanded ? '' : 'display:none'}">
+      <div class="qr-box" id="qrbox-${rsv.id}"></div>
+      <p style="font-size:0.7rem;color:var(--text-sub)">受付でこのQRをご提示ください</p>
+      <a href="/confirm.html?rid=${rsv.id}&token=${rsv.qr_token}&code=${rsv.reservation_code}"
+         class="btn btn-ghost btn-sm">予約完了ページを開く</a>
+    </div>`;
+
+  // Toggle
+  card.querySelector(`[data-toggle="${rsv.id}"]`).addEventListener('click', () => {
+    const body = document.getElementById(`body-${rsv.id}`);
+    const qr   = document.getElementById(`qr-${rsv.id}`);
+    const open = body.style.display !== 'none';
+    body.style.display = open ? 'none' : 'block';
+    qr.style.display   = open ? 'none' : 'flex';
+    if (!open) renderQR(rsv.qr_token, `qrbox-${rsv.id}`);
+  });
+
+  if (expanded) renderQR(rsv.qr_token, `qrbox-${rsv.id}`);
+  return card;
+}
+
+function renderQR(token, containerId) {
+  const el = document.getElementById(containerId);
+  if (!el || el.innerHTML.trim()) return;
+  new QRCode(el, { text:token, width:160, height:160, colorDark:'#000', colorLight:'#fff', correctLevel:QRCode.CorrectLevel.M });
+}
+
+async function loadFromLocal() {
+  const saved = JSON.parse(localStorage.getItem('jazzin_myreservations') || '[]');
+  if (!saved.length) {
+    list.innerHTML = `<div class="empty-state"><div class="empty-icon">🎫</div><p>このブラウザでの予約が見つかりません</p><p style="margin-top:0.5rem;font-size:0.8rem">下の検索フォームから予約番号かメールアドレスで検索できます</p></div>`;
+    return;
+  }
+
+  const ids = saved.map(r => r.id);
+  const { data } = await supabase
+    .from('reservations')
+    .select(`id, reservation_code, qr_token, guest_name, num_seats, payment_status,
+      event:events(title, event_at, venue_name, ticket_price),
+      reservation_seats(seat:seats(label)),
+      checkins(id)`)
+    .in('id', ids)
+    .order('created_at', { ascending: false });
+
+  if (!data?.length) {
+    list.innerHTML = `<div class="empty-state"><div class="empty-icon">🎫</div><p>予約が見つかりません</p></div>`;
+    return;
+  }
+  list.innerHTML = '';
+  data.forEach((rsv, i) => list.appendChild(renderCard(rsv, i === 0)));
+}
+
+async function searchReservations(query) {
+  const q = query.trim();
+  if (!q) return;
+
+  list.innerHTML = '<div style="text-align:center;padding:2rem"><div class="spinner" style="margin:0 auto"></div></div>';
+
+  const isCode  = /^[A-Z]-\d+$/.test(q.toUpperCase());
+  const isEmail = q.includes('@');
+
+  let qb = supabase
+    .from('reservations')
+    .select(`id, reservation_code, qr_token, guest_name, num_seats, payment_status,
+      event:events(title, event_at, venue_name, ticket_price),
+      reservation_seats(seat:seats(label)),
+      checkins(id)`);
+
+  if (isCode)       qb = qb.eq('reservation_code', q.toUpperCase());
+  else if (isEmail) qb = qb.eq('guest_email', q.toLowerCase());
+  else              qb = qb.ilike('guest_name', `%${q}%`);
+
+  const { data } = await qb.order('created_at', { ascending:false }).limit(10);
+
+  list.innerHTML = '';
+  if (!data?.length) {
+    list.innerHTML = `<div class="empty-state"><div class="empty-icon">🔍</div><p>「${q}」の予約が見つかりません</p></div>`;
+    return;
+  }
+  data.forEach((rsv, i) => list.appendChild(renderCard(rsv, i === 0)));
+}
+
+document.getElementById('btn-search').addEventListener('click', () => {
+  searchReservations(document.getElementById('search-input').value);
+});
+document.getElementById('search-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') searchReservations(e.target.value);
+});
+
+// URL パラメータから直接表示
+const params = new URLSearchParams(location.search);
+const rid = params.get('rid');
+if (rid) {
+  supabase.from('reservations')
+    .select(`id, reservation_code, qr_token, guest_name, num_seats, payment_status,
+      event:events(title, event_at, venue_name, ticket_price),
+      reservation_seats(seat:seats(label)),
+      checkins(id)`)
+    .eq('id', rid).single()
+    .then(({ data }) => {
+      if (data) { list.innerHTML = ''; list.appendChild(renderCard(data, true)); }
+      else loadFromLocal();
+    });
+} else {
+  loadFromLocal();
+}
+</script>
+</body>
+</html>

@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#000a10">
+<link rel="manifest" href="/manifest.json">
 <title>JAZZIN — ライブイベント</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%23000810'/><text x='50%25' y='72%25' font-family='serif' font-size='20' fill='%2300d4ff' text-anchor='middle' font-weight='bold'>J</text></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -159,5 +160,6 @@ async function loadEvents() {
 
 loadEvents();
 </script>
+<script>if("serviceWorker" in navigator){navigator.serviceWorker.register("/sw.js").catch(()=>{});}</script>
 </body>
 </html>
