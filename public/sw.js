@@ -1,6 +1,6 @@
-// JAZZIN Service Worker v4
-// クエリパラメータ付きURLのリダイレクト問題を根本解決
-const CACHE_NAME = 'jazzin-v4';
+// JAZZIN Service Worker v5
+// レスポンスcloneのレースコンディション修正
+const CACHE_NAME = 'jazzin-v5';
 
 const PRECACHE = [
   '/ui/style.css',
@@ -47,8 +47,11 @@ self.addEventListener('fetch', event => {
       fetch(event.request)
         .then(response => {
           if (response.ok && response.type === 'basic') {
-            caches.open(CACHE_NAME)
-              .then(cache => cache.put(event.request, response.clone()));
+            // cloneを先に作ってからキャッシュへ（レースコンディション防止）
+            const toCache = response.clone();
+            event.waitUntil(
+              caches.open(CACHE_NAME).then(cache => cache.put(event.request, toCache))
+            );
           }
           return response;
         })
@@ -63,8 +66,11 @@ self.addEventListener('fetch', event => {
       if (cached) return cached;
       return fetch(event.request).then(response => {
         if (response.ok && response.type === 'basic') {
-          caches.open(CACHE_NAME)
-            .then(cache => cache.put(event.request, response.clone()));
+          // cloneを先に作ってからキャッシュへ（レースコンディション防止）
+          const toCache = response.clone();
+          event.waitUntil(
+            caches.open(CACHE_NAME).then(cache => cache.put(event.request, toCache))
+          );
         }
         return response;
       });
