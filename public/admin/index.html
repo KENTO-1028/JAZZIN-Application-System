@@ -92,6 +92,7 @@ textarea.form-input { min-height: 80px; resize: vertical; }
     <div class="sidebar-section">運営</div>
     <a href="#dashboard" class="sidebar-link active" data-section="dashboard">📊 ダッシュボード</a>
     <a href="/checkin.html" class="sidebar-link" target="_blank">📷 受付モード</a>
+    <a href="/admin/layout-editor.html" class="sidebar-link" data-section="layout">💺 座席レイアウト</a>
     <div class="sidebar-section">管理</div>
     <a href="#events" class="sidebar-link" data-section="events">🎵 イベント</a>
     <a href="#reservations" class="sidebar-link" data-section="reservations">🎟 予約一覧</a>
@@ -204,8 +205,30 @@ textarea.form-input { min-height: 80px; resize: vertical; }
               <textarea class="form-input" id="ef-notes" rows="2"></textarea>
             </div>
             <div class="form-group">
-              <label class="form-label">ヒーロー画像URL</label>
-              <input type="url" class="form-input" id="ef-hero">
+              <label class="form-label">ヒーロー画像</label>
+              <div id="hero-upload-area" style="border:1px dashed var(--glass-border);border-radius:var(--radius);padding:1.5rem;text-align:center;cursor:pointer;background:rgba(0,15,30,0.4);transition:border-color 200ms;position:relative" 
+                   onclick="document.getElementById('ef-hero-file').click()"
+                   ondragover="event.preventDefault();this.style.borderColor='var(--accent-1)'"
+                   ondragleave="this.style.borderColor='var(--glass-border)'"
+                   ondrop="handleHeroDrop(event)">
+                <div id="hero-preview-wrap" style="display:none;margin-bottom:0.75rem">
+                  <img id="hero-preview-img" src="" alt="preview" style="max-width:100%;max-height:180px;border-radius:6px;object-fit:cover">
+                </div>
+                <div id="hero-upload-hint">
+                  <div style="font-size:1.5rem;margin-bottom:0.4rem">🖼</div>
+                  <div style="font-size:0.82rem;color:var(--text-sub)">クリックまたはドラッグ＆ドロップで画像をアップロード</div>
+                  <div style="font-size:0.72rem;color:var(--c-dim);margin-top:0.25rem">JPG・PNG・WEBP対応・圧縮なし</div>
+                </div>
+                <div id="hero-uploading" style="display:none">
+                  <div class="spinner" style="margin:0 auto 0.5rem"></div>
+                  <div style="font-size:0.8rem;color:var(--text-sub)">アップロード中...</div>
+                </div>
+                <input type="file" id="ef-hero-file" accept="image/*" style="display:none" onchange="handleHeroUpload(this.files[0])">
+              </div>
+              <div style="display:flex;align-items:center;gap:0.5rem;margin-top:0.5rem">
+                <input type="text" class="form-input" id="ef-hero" placeholder="アップロード後に自動入力されます" style="flex:1;font-size:0.78rem" readonly>
+                <button type="button" class="btn btn-ghost btn-sm" id="btn-hero-clear" onclick="clearHeroImage()" style="display:none;flex-shrink:0">削除</button>
+              </div>
             </div>
             <div class="form-two">
               <div class="form-group">
@@ -389,7 +412,7 @@ const DRAFT_KEY    = 'jazzin_event_draft';
 const FORM_FIELDS = [
   'ef-title','ef-venue','ef-event-at','ef-doors-at',
   'ef-price','ef-capacity','ef-rows','ef-cols',
-  'ef-address','ef-desc','ef-notes','ef-hero',
+  'ef-address','ef-desc','ef-notes',
   'ef-status','ef-publish-at'
 ];
 
@@ -511,7 +534,7 @@ document.getElementById('btn-event-save').addEventListener('click', async () => 
     venue_address: document.getElementById('ef-address').value.trim() || null,
     description:   document.getElementById('ef-desc').value.trim() || null,
     notes:         document.getElementById('ef-notes').value.trim() || null,
-    hero_image_url:document.getElementById('ef-hero').value.trim() || null,
+    hero_image_url:document.getElementById('ef-hero').value.trim() || null, // Supabase Storageにアップロード済みのURL
     status:        document.getElementById('ef-status').value,
     publish_at:    document.getElementById('ef-publish-at').value || null,
   };
@@ -585,6 +608,79 @@ async function init() {
   await loadAllEvents();
 }
 init();
+
+// ── Hero Image Upload (Supabase Storage) ─────────────────────
+async function handleHeroUpload(file) {
+  if (!file) return;
+  const area = document.getElementById('hero-upload-area');
+  const hint = document.getElementById('hero-upload-hint');
+  const uploading = document.getElementById('hero-uploading');
+  const preview = document.getElementById('hero-preview-wrap');
+  const previewImg = document.getElementById('hero-preview-img');
+  const clearBtn = document.getElementById('btn-hero-clear');
+
+  hint.style.display = 'none';
+  preview.style.display = 'none';
+  uploading.style.display = 'block';
+  area.style.borderColor = 'var(--accent-1)';
+
+  try {
+    // ファイル名をユニークに（圧縮・変換一切なし）
+    const ext = file.name.split('.').pop().toLowerCase();
+    const fileName = `events/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+
+    // Supabase Storageにそのままアップロード（圧縮なし）
+    const { data, error } = await supabase.storage
+      .from('event-images')
+      .upload(fileName, file, {
+        contentType: file.type,
+        upsert: false,
+      });
+
+    if (error) throw error;
+
+    // 公開URLを取得
+    const { data: urlData } = supabase.storage
+      .from('event-images')
+      .getPublicUrl(fileName);
+
+    const publicUrl = urlData.publicUrl;
+    document.getElementById('ef-hero').value = publicUrl;
+
+    // プレビュー表示
+    previewImg.src = publicUrl;
+    preview.style.display = 'block';
+    hint.style.display = 'none';
+    clearBtn.style.display = 'inline-flex';
+    showToast('画像をアップロードしました');
+
+  } catch (err) {
+    showToast('アップロード失敗: ' + (err.message || 'エラー'));
+    hint.style.display = 'block';
+    console.error(err);
+  } finally {
+    uploading.style.display = 'none';
+    area.style.borderColor = 'var(--glass-border)';
+  }
+}
+
+function handleHeroDrop(event) {
+  event.preventDefault();
+  document.getElementById('hero-upload-area').style.borderColor = 'var(--glass-border)';
+  const file = event.dataTransfer.files[0];
+  if (file && file.type.startsWith('image/')) handleHeroUpload(file);
+}
+
+function clearHeroImage() {
+  document.getElementById('ef-hero').value = '';
+  document.getElementById('hero-preview-img').src = '';
+  document.getElementById('hero-preview-wrap').style.display = 'none';
+  document.getElementById('hero-upload-hint').style.display = 'block';
+  document.getElementById('btn-hero-clear').style.display = 'none';
+  document.getElementById('ef-hero-file').value = '';
+  document.getElementById('hero-upload-area').style.borderColor = 'var(--glass-border)';
+}
+
 </script>
 </body>
 </html>

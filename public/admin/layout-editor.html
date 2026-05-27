@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#000a10">
+<title>JAZZIN — 座席レイアウトエディタ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="/config.js"></script>
+<link rel="stylesheet" href="/ui/style.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<style>
+body { min-height:100dvh; }
+.editor-layout { display:grid; grid-template-columns:260px 1fr; min-height:calc(100dvh - 56px); gap:0; }
+.editor-sidebar {
+  background:rgba(0,10,20,0.9); backdrop-filter:blur(20px);
+  border-right:1px solid var(--glass-border);
+  padding:1.25rem; overflow-y:auto;
+  position:sticky; top:56px; height:calc(100dvh - 56px);
+}
+.editor-main { padding:1.5rem; overflow-y:auto; }
+.sidebar-title { font-family:var(--font-display); font-size:0.9rem; letter-spacing:0.2em; color:var(--text-sub); margin-bottom:0.75rem; margin-top:1.25rem; }
+.sidebar-title:first-child { margin-top:0; }
+
+/* Tool buttons */
+.tool-btn {
+  display:flex; align-items:center; gap:0.5rem;
+  width:100%; padding:0.6rem 0.75rem;
+  background:rgba(0,212,255,0.05); border:1px solid var(--glass-border);
+  border-radius:var(--radius); color:var(--text-sub);
+  font-size:0.82rem; cursor:pointer; margin-bottom:0.4rem;
+  transition:all 120ms; text-align:left; font-family:var(--font-body);
+}
+.tool-btn:hover { border-color:rgba(0,212,255,0.3); color:var(--text-main); background:rgba(0,212,255,0.1); }
+.tool-btn.active { border-color:var(--accent-1); color:var(--accent-1); background:rgba(0,212,255,0.12); box-shadow:0 0 12px rgba(0,212,255,0.15); }
+.tool-icon { font-size:1rem; width:20px; text-align:center; flex-shrink:0; }
+
+/* Grid editor */
+.grid-editor-wrap { overflow-x:auto; margin-bottom:1rem; }
+.grid-editor {
+  display:inline-grid;
+  gap:4px;
+  cursor:crosshair;
+  user-select:none;
+}
+.editor-cell {
+  width:40px; height:40px;
+  border-radius:5px; border:1px solid var(--glass-border);
+  display:flex; align-items:center; justify-content:center;
+  font-size:0.52rem; font-weight:500;
+  cursor:pointer; transition:80ms;
+  position:relative;
+}
+.editor-cell[data-type="seat"] {
+  background:rgba(0,212,255,0.06); border-color:rgba(0,212,255,0.2);
+  color:var(--text-sub);
+}
+.editor-cell[data-type="seat"]:hover { background:rgba(0,212,255,0.15); border-color:var(--accent-1); }
+.editor-cell[data-type="aisle"] {
+  background:transparent; border-color:rgba(255,255,255,0.04);
+  color:transparent;
+}
+.editor-cell[data-type="stage"] {
+  background:rgba(0,212,255,0.08); border-color:rgba(0,212,255,0.3);
+  color:var(--accent-1); font-size:0.5rem; font-weight:700; letter-spacing:0.1em;
+}
+.editor-cell[data-type="entrance"] {
+  background:rgba(127,255,212,0.1); border-color:rgba(127,255,212,0.4);
+  color:var(--c-green); font-size:0.5rem;
+}
+.editor-cell[data-type="wall"] {
+  background:rgba(255,255,255,0.06); border-color:rgba(255,255,255,0.15);
+  color:var(--c-dim);
+}
+
+/* Stage position selector */
+.stage-pos-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:4px; margin-bottom:0.5rem; }
+.stage-pos-btn {
+  padding:0.4rem; text-align:center; font-size:0.7rem;
+  background:rgba(0,212,255,0.05); border:1px solid var(--glass-border);
+  border-radius:4px; cursor:pointer; color:var(--text-sub);
+}
+.stage-pos-btn.active { border-color:var(--accent-1); color:var(--accent-1); background:rgba(0,212,255,0.1); }
+.stage-pos-btn:hover { border-color:rgba(0,212,255,0.3); }
+
+/* Legend */
+.legend-row { display:flex; align-items:center; gap:6px; font-size:0.75rem; color:var(--text-sub); margin-bottom:4px; }
+.legend-dot { width:14px; height:14px; border-radius:3px; flex-shrink:0; }
+
+/* Stats */
+.stat-pill {
+  display:inline-flex; align-items:center; gap:4px;
+  background:rgba(0,212,255,0.08); border:1px solid rgba(0,212,255,0.15);
+  border-radius:20px; padding:0.25rem 0.75rem; font-size:0.78rem; color:var(--accent-1);
+  margin-right:0.5rem; margin-bottom:0.5rem;
+}
+
+@media (max-width:640px) {
+  .editor-layout { grid-template-columns:1fr; }
+  .editor-sidebar { position:static; height:auto; }
+}
+</style>
+</head>
+<body>
+
+<div class="aurora-wrap" style="opacity:0.4">
+  <div class="aurora-blob"></div>
+  <div class="aurora-blob"></div>
+</div>
+
+<header class="header">
+  <div class="header-inner">
+    <a href="/admin/index.html" class="logo"><img src="/assets/jazzin_logo.png" alt="JAZZIN" height="24"></a>
+    <div style="display:flex;gap:0.5rem;align-items:center">
+      <span id="event-title-header" style="font-size:0.8rem;color:var(--text-sub)"></span>
+      <a href="/admin/index.html" class="btn btn-ghost btn-sm">← 管理画面</a>
+    </div>
+  </div>
+</header>
+
+<div id="toast"></div>
+
+<div id="auth-guard" style="display:none;text-align:center;padding:4rem">
+  <p style="margin-bottom:1rem">管理者ログインが必要です</p>
+  <a href="/admin/login.html" class="btn btn-primary">ログイン</a>
+</div>
+
+<div id="app" style="display:none">
+  <!-- イベント未選択 -->
+  <div id="event-select-wrap" class="container" style="padding:2rem 1.25rem">
+    <h2 style="font-family:var(--font-display);letter-spacing:0.1em;margin-bottom:1.5rem">LAYOUT EDITOR</h2>
+    <p style="color:var(--text-sub);margin-bottom:1rem">編集するイベントを選択してください</p>
+    <div id="event-select-list"></div>
+  </div>
+
+  <!-- エディタ本体 -->
+  <div id="editor-wrap" class="editor-layout" style="display:none">
+
+    <!-- Sidebar -->
+    <aside class="editor-sidebar">
+
+      <p class="sidebar-title">グリッドサイズ</p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem;margin-bottom:0.75rem">
+        <div class="form-group">
+          <label class="form-label">行数</label>
+          <input type="number" class="form-input" id="rows-input" value="6" min="1" max="20" style="padding:0.4rem 0.6rem">
+        </div>
+        <div class="form-group">
+          <label class="form-label">列数</label>
+          <input type="number" class="form-input" id="cols-input" value="6" min="1" max="20" style="padding:0.4rem 0.6rem">
+        </div>
+      </div>
+      <button class="btn btn-ghost btn-full btn-sm" id="btn-resize" style="margin-bottom:0.75rem">グリッドを再生成</button>
+
+      <p class="sidebar-title">ツール</p>
+      <button class="tool-btn active" data-tool="seat" id="tool-seat">
+        <span class="tool-icon">🪑</span>座席
+      </button>
+      <button class="tool-btn" data-tool="aisle" id="tool-aisle">
+        <span class="tool-icon">　</span>通路（空白）
+      </button>
+      <button class="tool-btn" data-tool="entrance" id="tool-entrance">
+        <span class="tool-icon">🚪</span>出入口
+      </button>
+      <button class="tool-btn" data-tool="stage" id="tool-stage">
+        <span class="tool-icon">🎵</span>ステージ
+      </button>
+      <button class="tool-btn" data-tool="wall" id="tool-wall">
+        <span class="tool-icon">🧱</span>壁・障害物
+      </button>
+
+      <p class="sidebar-title">ステージ表示位置</p>
+      <div class="stage-pos-grid">
+        <div></div>
+        <button class="stage-pos-btn active" data-pos="top">上</button>
+        <div></div>
+        <button class="stage-pos-btn" data-pos="left">左</button>
+        <button class="stage-pos-btn" data-pos="none">なし</button>
+        <button class="stage-pos-btn" data-pos="right">右</button>
+        <div></div>
+        <button class="stage-pos-btn" data-pos="bottom">下</button>
+        <div></div>
+      </div>
+
+      <p class="sidebar-title">凡例</p>
+      <div class="legend-row"><div class="legend-dot" style="background:rgba(0,212,255,0.1);border:1px solid rgba(0,212,255,0.3)"></div>座席</div>
+      <div class="legend-row"><div class="legend-dot" style="background:transparent;border:1px solid rgba(255,255,255,0.05)"></div>通路</div>
+      <div class="legend-row"><div class="legend-dot" style="background:rgba(127,255,212,0.15);border:1px solid rgba(127,255,212,0.4)"></div>出入口</div>
+      <div class="legend-row"><div class="legend-dot" style="background:rgba(0,212,255,0.1);border:1px solid rgba(0,212,255,0.4)"></div>ステージ</div>
+      <div class="legend-row"><div class="legend-dot" style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.2)"></div>壁</div>
+
+      <div style="margin-top:1.5rem;display:flex;flex-direction:column;gap:0.5rem">
+        <button class="btn btn-primary btn-full" id="btn-save">💾 保存して反映</button>
+        <button class="btn btn-ghost btn-full btn-sm" id="btn-reset">リセット</button>
+      </div>
+
+    </aside>
+
+    <!-- Main editor area -->
+    <main class="editor-main" style="position:relative;z-index:1">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;flex-wrap:wrap;gap:0.5rem">
+        <div>
+          <h2 style="font-family:var(--font-display);font-size:1.3rem;letter-spacing:0.1em">LAYOUT EDITOR</h2>
+          <p style="font-size:0.78rem;color:var(--text-sub);margin-top:2px">クリックまたはドラッグで描画</p>
+        </div>
+        <div id="seat-stats" style="display:flex;flex-wrap:wrap"></div>
+      </div>
+
+      <!-- Stage indicator (top) -->
+      <div id="stage-indicator-top" class="stage-label" style="margin-bottom:0.75rem">— STAGE —</div>
+
+      <div class="grid-editor-wrap">
+        <div id="grid-editor" class="grid-editor"></div>
+      </div>
+
+      <!-- Stage indicator (bottom) -->
+      <div id="stage-indicator-bottom" class="stage-label" style="margin-top:0.75rem;display:none">— STAGE —</div>
+
+      <p style="font-size:0.72rem;color:var(--c-dim);margin-top:0.75rem">
+        💡 ドラッグで連続描画できます。保存すると座席テーブルに反映されます。
+      </p>
+    </main>
+  </div>
+</div>
+
+<script type="module">
+import { supabase, formatDate } from '/core/supabase.js';
+
+// ── State ────────────────────────────────────────────────────
+let currentEventId = null;
+let currentTool    = 'seat';
+let stagePosition  = 'top';
+let rows = 6, cols = 6;
+let grid = []; // grid[row][col] = { type: 'seat'|'aisle'|'entrance'|'stage'|'wall', label: '' }
+let isDragging = false;
+let dragType   = null;
+
+function showToast(msg, ms=2000) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), ms);
+}
+
+// ── Auth ─────────────────────────────────────────────────────
+async function checkAuth() {
+  const { data } = await supabase.auth.getUser();
+  if (!data?.user) {
+    document.getElementById('auth-guard').style.display = 'block';
+    return false;
+  }
+  document.getElementById('app').style.display = 'block';
+  return true;
+}
+
+// ── Event selection ──────────────────────────────────────────
+async function loadEventList() {
+  const { data } = await supabase
+    .from('events')
+    .select('id, title, event_at, status')
+    .order('event_at', { ascending: false })
+    .limit(20);
+
+  const list = document.getElementById('event-select-list');
+  list.innerHTML = '';
+  (data || []).forEach(ev => {
+    const btn = document.createElement('button');
+    btn.style.cssText = 'display:flex;flex-direction:column;gap:3px;padding:1rem 1.1rem;background:rgba(0,25,45,0.5);border:1px solid var(--glass-border);border-radius:var(--radius);margin-bottom:0.6rem;cursor:pointer;text-align:left;width:100%;color:var(--text-main);transition:border-color 150ms';
+    btn.innerHTML = `
+      <div style="font-weight:500">${ev.title}</div>
+      <div style="font-size:0.75rem;color:var(--text-sub)">${formatDate(ev.event_at)} — <span class="badge ${ev.status==='published'?'badge-ok':'badge-admin'}">${ev.status}</span></div>`;
+    btn.addEventListener('mouseover', () => btn.style.borderColor='rgba(0,212,255,0.3)');
+    btn.addEventListener('mouseout',  () => btn.style.borderColor='var(--glass-border)');
+    btn.addEventListener('click', () => openEditor(ev));
+    list.appendChild(btn);
+  });
+}
+
+async function openEditor(ev) {
+  currentEventId = ev.id;
+  document.getElementById('event-title-header').textContent = ev.title;
+  document.getElementById('event-select-wrap').style.display = 'none';
+  document.getElementById('editor-wrap').style.display = 'grid';
+
+  // 既存の座席データを読み込む
+  const { data: seats } = await supabase
+    .from('seats')
+    .select('row_num, col_num, label')
+    .eq('event_id', ev.id)
+    .order('row_num').order('col_num');
+
+  // layout_metaを読み込む
+  const { data: evData } = await supabase
+    .from('events')
+    .select('layout_meta')
+    .eq('id', ev.id)
+    .single();
+
+  const meta = evData?.layout_meta || {};
+
+  if (seats && seats.length > 0) {
+    rows = Math.max(...seats.map(s => s.row_num));
+    cols = Math.max(...seats.map(s => s.col_num));
+    document.getElementById('rows-input').value = rows;
+    document.getElementById('cols-input').value = cols;
+  }
+
+  stagePosition = meta.stage_position || 'top';
+  updateStagePosUI();
+
+  const aisles    = new Set((meta.aisles    || []).map(a => `${a.row},${a.col}`));
+  const entrances = new Set((meta.entrances || []).map(e => `${e.row},${e.col}`));
+  const stages    = new Set((meta.stages    || []).map(s => `${s.row},${s.col}`));
+  const walls     = new Set((meta.walls     || []).map(w => `${w.row},${w.col}`));
+  const seatKeys  = new Set((seats || []).map(s => `${s.row_num},${s.col_num}`));
+  const seatLabels = {};
+  (seats || []).forEach(s => { seatLabels[`${s.row_num},${s.col_num}`] = s.label; });
+
+  initGrid(rows, cols);
+
+  // 既存データを反映
+  for (let r = 1; r <= rows; r++) {
+    for (let c = 1; c <= cols; c++) {
+      const key = `${r},${c}`;
+      if (stages.has(key))    grid[r][c].type = 'stage';
+      else if (entrances.has(key)) grid[r][c].type = 'entrance';
+      else if (walls.has(key))    grid[r][c].type = 'wall';
+      else if (aisles.has(key))   grid[r][c].type = 'aisle';
+      else if (seatKeys.has(key)) { grid[r][c].type = 'seat'; grid[r][c].label = seatLabels[key] || ''; }
+      else grid[r][c].type = 'aisle';
+    }
+  }
+
+  renderGrid();
+  updateStats();
+}
+
+// ── Grid init ────────────────────────────────────────────────
+function initGrid(r, c) {
+  rows = r; cols = c;
+  grid = [];
+  for (let i = 0; i <= r; i++) {
+    grid[i] = [];
+    for (let j = 0; j <= c; j++) {
+      grid[i][j] = { type: 'seat', label: '' };
+    }
+  }
+}
+
+function assignLabels() {
+  const rowLetters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  let seatNum = {};
+  for (let r = 1; r <= rows; r++) {
+    let colSeatIdx = 0;
+    for (let c = 1; c <= cols; c++) {
+      if (grid[r][c].type === 'seat') {
+        colSeatIdx++;
+        const letter = r <= 26 ? rowLetters[r-1] : `R${r}`;
+        grid[r][c].label = `${letter}-${colSeatIdx}`;
+      }
+    }
+  }
+}
+
+// ── Render grid ──────────────────────────────────────────────
+function renderGrid() {
+  const el = document.getElementById('grid-editor');
+  el.style.gridTemplateColumns = `repeat(${cols}, 40px)`;
+  el.innerHTML = '';
+
+  for (let r = 1; r <= rows; r++) {
+    for (let c = 1; c <= cols; c++) {
+      const cell = document.createElement('div');
+      cell.className = 'editor-cell';
+      cell.dataset.row = r;
+      cell.dataset.col = c;
+      applyCell(cell, grid[r][c].type, grid[r][c].label);
+
+      cell.addEventListener('mousedown', e => {
+        isDragging = true;
+        dragType   = currentTool;
+        paintCell(r, c);
+        e.preventDefault();
+      });
+      cell.addEventListener('mouseover', () => {
+        if (isDragging) paintCell(r, c);
+      });
+      el.appendChild(cell);
+    }
+  }
+
+  document.addEventListener('mouseup', () => { isDragging = false; }, { once: false });
+
+  // Stage indicators
+  const top    = document.getElementById('stage-indicator-top');
+  const bottom = document.getElementById('stage-indicator-bottom');
+  top.style.display    = stagePosition === 'top'    ? 'block' : 'none';
+  bottom.style.display = stagePosition === 'bottom' ? 'block' : 'none';
+
+  updateStats();
+}
+
+function applyCell(el, type, label) {
+  el.dataset.type = type;
+  const labels = { seat:'🪑', aisle:'', entrance:'出入口', stage:'STAGE', wall:'■' };
+  el.textContent = type === 'seat' ? (label || '？') : (labels[type] || '');
+}
+
+function paintCell(r, c) {
+  grid[r][c].type = currentTool;
+  if (currentTool !== 'seat') grid[r][c].label = '';
+  const el = document.querySelector(`.editor-cell[data-row="${r}"][data-col="${c}"]`);
+  if (el) applyCell(el, currentTool, grid[r][c].label);
+  updateStats();
+}
+
+function updateStats() {
+  assignLabels();
+  const seatCount     = countType('seat');
+  const aisleCount    = countType('aisle');
+  const entranceCount = countType('entrance');
+
+  // ラベル更新
+  for (let r = 1; r <= rows; r++) {
+    for (let c = 1; c <= cols; c++) {
+      if (grid[r][c].type === 'seat') {
+        const el = document.querySelector(`.editor-cell[data-row="${r}"][data-col="${c}"]`);
+        if (el) el.textContent = grid[r][c].label || '？';
+      }
+    }
+  }
+
+  document.getElementById('seat-stats').innerHTML = `
+    <span class="stat-pill">🪑 ${seatCount} 席</span>
+    <span class="stat-pill">🚪 ${entranceCount} 出入口</span>`;
+}
+
+function countType(type) {
+  let n = 0;
+  for (let r = 1; r <= rows; r++)
+    for (let c = 1; c <= cols; c++)
+      if (grid[r][c].type === type) n++;
+  return n;
+}
+
+// ── Tool selection ───────────────────────────────────────────
+document.querySelectorAll('.tool-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    currentTool = btn.dataset.tool;
+    document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+  });
+});
+
+// ── Stage position ───────────────────────────────────────────
+document.querySelectorAll('.stage-pos-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    stagePosition = btn.dataset.pos;
+    updateStagePosUI();
+    renderGrid();
+  });
+});
+
+function updateStagePosUI() {
+  document.querySelectorAll('.stage-pos-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.pos === stagePosition);
+  });
+}
+
+// ── Resize grid ──────────────────────────────────────────────
+document.getElementById('btn-resize').addEventListener('click', () => {
+  const r = parseInt(document.getElementById('rows-input').value) || 6;
+  const c = parseInt(document.getElementById('cols-input').value) || 6;
+  if (!confirm(`グリッドを ${r}×${c} に再生成します。現在の配置はリセットされます。`)) return;
+  initGrid(r, c);
+  // デフォルト全席
+  for (let i = 1; i <= r; i++)
+    for (let j = 1; j <= c; j++)
+      grid[i][j] = { type: 'seat', label: '' };
+  renderGrid();
+});
+
+document.getElementById('btn-reset').addEventListener('click', () => {
+  if (!confirm('レイアウトをリセットしますか？')) return;
+  for (let i = 1; i <= rows; i++)
+    for (let j = 1; j <= cols; j++)
+      grid[i][j] = { type: 'seat', label: '' };
+  renderGrid();
+});
+
+// ── Save ─────────────────────────────────────────────────────
+document.getElementById('btn-save').addEventListener('click', async () => {
+  if (!currentEventId) return;
+  const btn = document.getElementById('btn-save');
+  btn.disabled = true; btn.textContent = '保存中...';
+
+  try {
+    assignLabels();
+
+    const seatCells     = [];
+    const aisles        = [];
+    const entrances     = [];
+    const stages        = [];
+    const walls         = [];
+
+    for (let r = 1; r <= rows; r++) {
+      for (let c = 1; c <= cols; c++) {
+        const cell = grid[r][c];
+        if (cell.type === 'seat')     seatCells.push({ row:r, col:c, label:cell.label });
+        else if (cell.type === 'aisle')    aisles.push({ row:r, col:c });
+        else if (cell.type === 'entrance') entrances.push({ row:r, col:c });
+        else if (cell.type === 'stage')    stages.push({ row:r, col:c });
+        else if (cell.type === 'wall')     walls.push({ row:r, col:c });
+      }
+    }
+
+    // layout_meta を events テーブルに保存
+    const layoutMeta = { stage_position:stagePosition, aisles, entrances, stages, walls, rows, cols };
+    const { error: metaErr } = await supabase
+      .from('events')
+      .update({ layout_meta: layoutMeta })
+      .eq('id', currentEventId);
+    if (metaErr) throw metaErr;
+
+    // seats テーブルを更新（削除→挿入）
+    const { error: delErr } = await supabase
+      .from('seats')
+      .delete()
+      .eq('event_id', currentEventId);
+    if (delErr) throw delErr;
+
+    if (seatCells.length > 0) {
+      const insertData = seatCells.map(s => ({
+        event_id: currentEventId,
+        row_num:  s.row,
+        col_num:  s.col,
+        label:    s.label,
+        status:   'available',
+      }));
+      const { error: insErr } = await supabase.from('seats').insert(insertData);
+      if (insErr) throw insErr;
+    }
+
+    showToast(`✓ ${seatCells.length}席を保存しました`);
+  } catch (err) {
+    console.error(err);
+    showToast('保存に失敗しました: ' + err.message);
+  }
+
+  btn.disabled = false; btn.textContent = '💾 保存して反映';
+});
+
+// ── Init ─────────────────────────────────────────────────────
+async function init() {
+  const ok = await checkAuth();
+  if (!ok) return;
+
+  const params = new URLSearchParams(location.search);
+  const eid = params.get('event_id');
+  await loadEventList();
+
+  if (eid) {
+    const { data: ev } = await supabase
+      .from('events').select('id,title,event_at,status').eq('id', eid).single();
+    if (ev) openEditor(ev);
+  }
+}
+
+init();
+</script>
+</body>
+</html>

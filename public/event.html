@@ -13,10 +13,10 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <style>
 body { min-height:100dvh; }
-.hero-img { width:100%; max-height:360px; object-fit:cover; }
+.hero-img { width:100%; max-height:360px; object-fit:cover; display:block; }
 .hero-placeholder {
   width:100%; height:220px;
-  background: linear-gradient(135deg, #000d16 0%, #001828 50%, #000d16 100%);
+  background:linear-gradient(135deg,#000d16,#001828,#000d16);
   display:flex; align-items:center; justify-content:center;
   border-bottom:1px solid var(--glass-border);
 }
@@ -26,8 +26,7 @@ body { min-height:100dvh; }
 .event-meta-value { font-size:0.9rem; color:var(--text-main); }
 .section { margin:2rem 0; }
 .section-title {
-  font-family:var(--font-display);
-  font-size:0.85rem; letter-spacing:0.25em; color:var(--text-sub);
+  font-family:var(--font-display); font-size:0.85rem; letter-spacing:0.25em; color:var(--text-sub);
   margin-bottom:1rem; display:flex; align-items:center; gap:0.75rem;
 }
 .section-title::after { content:''; flex:1; height:1px; background:var(--glass-border); }
@@ -35,8 +34,7 @@ body { min-height:100dvh; }
 .performer-card {
   background:rgba(0,25,45,0.5); backdrop-filter:blur(16px);
   border:1px solid var(--glass-border); border-radius:var(--radius);
-  padding:0.75rem 1rem; flex:1; min-width:160px;
-  transition:border-color 200ms;
+  padding:0.75rem 1rem; flex:1; min-width:160px; transition:border-color 200ms;
 }
 .performer-card:hover { border-color:rgba(0,212,255,0.25); }
 .performer-name { font-weight:500; font-size:0.9rem; color:var(--text-main); }
@@ -44,16 +42,50 @@ body { min-height:100dvh; }
 .timetable { display:flex; flex-direction:column; gap:0.6rem; }
 .timetable-row { display:flex; gap:1rem; align-items:baseline; padding:0.5rem 0; border-bottom:1px solid rgba(100,200,255,0.05); }
 .timetable-row:last-child { border-bottom:none; }
-.timetable-time { color:var(--accent-1); font-weight:600; font-size:0.85rem; min-width:56px; font-family:var(--font-display); letter-spacing:0.05em; }
+.timetable-time { color:var(--accent-1); font-weight:600; font-size:0.85rem; min-width:56px; font-family:var(--font-display); }
 .timetable-act  { font-size:0.875rem; color:var(--text-main); }
 .flow-step { display:flex; gap:1rem; align-items:center; margin-bottom:0.75rem; }
 .flow-num {
   width:28px; height:28px; border-radius:50%;
-  background:linear-gradient(135deg, var(--accent-2), var(--accent-1));
+  background:linear-gradient(135deg,var(--accent-2),var(--accent-1));
   color:#000a10; font-size:0.72rem; font-weight:700;
   display:flex; align-items:center; justify-content:center; flex-shrink:0;
   box-shadow:0 0 12px rgba(0,212,255,0.3);
 }
+
+/* ── Seat map wrapper ── */
+.seatmap-wrap {
+  overflow-x: auto;
+  padding-bottom: 0.5rem;
+}
+.seatmap-inner {
+  display: inline-block;
+  min-width: 100%;
+}
+
+/* ── Layout special cells ── */
+.seat[data-type="aisle"] {
+  background: transparent !important;
+  border-color: transparent !important;
+  cursor: default !important;
+  color: transparent !important;
+}
+.seat[data-type="entrance"] {
+  background: rgba(127,255,212,0.08) !important;
+  border-color: rgba(127,255,212,0.3) !important;
+  color: var(--c-green) !important;
+  cursor: default !important;
+  font-size: 0.5rem !important;
+}
+.seat[data-type="stage"] {
+  background: rgba(0,212,255,0.06) !important;
+  border-color: rgba(0,212,255,0.2) !important;
+  color: var(--accent-1) !important;
+  cursor: default !important;
+  font-size: 0.5rem !important;
+  border-radius: 3px !important;
+}
+
 /* Booking panel */
 .booking-panel {
   position:fixed; bottom:0; left:0; right:0;
@@ -69,6 +101,7 @@ body { min-height:100dvh; }
 .booking-price { font-size:0.82rem; color:var(--accent-1); }
 .lock-timer { font-size:0.72rem; color:var(--text-sub); display:flex; align-items:center; gap:4px; }
 .lock-timer span { color:var(--accent-1); font-weight:600; }
+
 /* Modal */
 .modal-overlay {
   position:fixed; inset:0; background:rgba(0,5,12,0.85); z-index:200;
@@ -81,8 +114,17 @@ body { min-height:100dvh; }
   width:100%; max-width:460px; max-height:90dvh; overflow-y:auto; padding:1.75rem;
   box-shadow:0 20px 60px rgba(0,0,0,0.7);
 }
-.modal-title { font-family:var(--font-display); font-size:1.4rem; letter-spacing:0.08em; margin-bottom:1.3rem; color:var(--text-main); }
+.modal-title { font-family:var(--font-display); font-size:1.4rem; letter-spacing:0.08em; margin-bottom:1.3rem; }
 .form-stack { display:flex; flex-direction:column; gap:1rem; }
+
+/* No seats message */
+.no-seats-msg {
+  text-align:center; padding:2rem;
+  color:var(--text-sub); font-size:0.875rem;
+  background:rgba(0,212,255,0.03);
+  border:1px solid var(--glass-border);
+  border-radius:var(--radius);
+}
 </style>
 </head>
 <body>
@@ -114,7 +156,9 @@ body { min-height:100dvh; }
     <div style="flex:1">
       <div class="booking-seats" id="booking-seats-label">座席を選んでください</div>
       <div class="booking-price" id="booking-price-label"></div>
-      <div class="lock-timer" id="lock-timer-el" style="display:none">🔒 <span id="lock-timer-val">5:00</span> で仮ロック解除</div>
+      <div class="lock-timer" id="lock-timer-el" style="display:none">
+        🔒 <span id="lock-timer-val">5:00</span> で仮ロック解除
+      </div>
     </div>
     <button class="btn btn-primary btn-lg" id="btn-reserve" disabled>予約へ進む</button>
   </div>
@@ -140,7 +184,7 @@ body { min-height:100dvh; }
         <label class="form-label">備考（任意）</label>
         <input type="text" class="form-input" id="f-notes" placeholder="アレルギーなど">
       </div>
-      <div style="background:rgba(0,10,20,0.5);border:1px solid var(--glass-border);border-radius:var(--radius);padding:0.9rem;font-size:0.82rem;color:var(--text-sub)" id="modal-summary"></div>
+      <div id="modal-summary" style="background:rgba(0,10,20,0.5);border:1px solid var(--glass-border);border-radius:var(--radius);padding:0.9rem;font-size:0.82rem;color:var(--text-sub)"></div>
       <div style="display:flex;gap:0.75rem;margin-top:0.3rem">
         <button class="btn btn-ghost btn-full" id="btn-modal-cancel">キャンセル</button>
         <button class="btn btn-primary btn-full" id="btn-confirm" disabled>
@@ -160,64 +204,149 @@ import {
 
 const params   = new URLSearchParams(location.search);
 const EVENT_ID = params.get('id');
-if (!EVENT_ID) location.href = '/';
+if (!EVENT_ID) { location.href = '/'; }
 
-let event = null;
-let seats = [];
+let event       = null;
+let seats       = [];
+let layoutMeta  = null; // {rows, cols, stage_position, aisles, entrances}
 let selectedIds = new Set();
-let lockTimer = null;
-let lockExpiry = null;
+let lockTimer   = null;
+let lockExpiry  = null;
 const TICKET_PRICE = () => event?.ticket_price || 500;
 
 function showToast(msg, ms=2000) {
   const t = document.getElementById('toast');
-  t.textContent=msg; t.classList.add('show');
-  setTimeout(()=>t.classList.remove('show'),ms);
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), ms);
 }
 
-function renderPage(ev, seatData) {
-  const rows = Math.max(...seatData.map(s=>s.row_num));
-  const cols = Math.max(...seatData.map(s=>s.col_num));
-  const avail = seatData.filter(s=>s.status===SeatStatus.AVAILABLE).length;
+// ── Fetch layout meta from events table ──────────────────────
+async function fetchLayoutMeta(eventId) {
+  const { data } = await supabase
+    .from('events')
+    .select('layout_meta')
+    .eq('id', eventId)
+    .single();
+  return data?.layout_meta || null;
+}
+
+// ── Render full page ─────────────────────────────────────────
+function renderPage(ev, seatData, meta) {
+  const rows = seatData.length > 0 ? Math.max(...seatData.map(s => s.row_num)) : 6;
+  const cols = seatData.length > 0 ? Math.max(...seatData.map(s => s.col_num)) : 6;
+  const avail = seatData.filter(s => s.status === SeatStatus.AVAILABLE).length;
 
   const performers = Array.isArray(ev.performers)
-    ? ev.performers.map(p=>`<div class="performer-card"><div class="performer-name">${p.name}</div><div class="performer-role">${p.role||''}</div></div>`).join('')
-    : '';
+    ? ev.performers.map(p => `
+        <div class="performer-card">
+          <div class="performer-name">${p.name}</div>
+          <div class="performer-role">${p.role || ''}</div>
+        </div>`).join('') : '';
 
   const timetable = Array.isArray(ev.timetable)
-    ? ev.timetable.map(t=>`<div class="timetable-row"><span class="timetable-time">${t.time}</span><span class="timetable-act">${t.act}</span></div>`).join('')
-    : '';
+    ? ev.timetable.map(t => `
+        <div class="timetable-row">
+          <span class="timetable-time">${t.time}</span>
+          <span class="timetable-act">${t.act}</span>
+        </div>`).join('') : '';
+
+  const stagePos = meta?.stage_position || 'top';
+  const stageLabel = `<div class="stage-label">— STAGE —</div>`;
 
   document.getElementById('page-content').innerHTML = `
     ${ev.hero_image_url
       ? `<img class="hero-img" src="${ev.hero_image_url}" alt="${ev.title}">`
-      : '<div class="hero-placeholder"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="rgba(0,212,255,0.1)" stroke-width="1"><path d="M9 18V5l12-2v13M9 18c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-2c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2z"/></svg></div>'}
-    <div class="container page" style="padding-bottom:120px">
+      : `<div class="hero-placeholder">
+           <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="rgba(0,212,255,0.1)" stroke-width="1">
+             <path d="M9 18V5l12-2v13M9 18c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-2c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2z"/>
+           </svg>
+         </div>`}
+
+    <div class="container page" style="padding-bottom:140px">
       <h1 style="margin-bottom:0.5rem">${ev.title}</h1>
       <div class="event-meta-row">
-        <div class="event-meta-item"><span class="event-meta-label">DATE & TIME</span><span class="event-meta-value">${formatDate(ev.event_at)}</span></div>
-        ${ev.doors_open_at?`<div class="event-meta-item"><span class="event-meta-label">OPEN</span><span class="event-meta-value">${new Date(ev.doors_open_at).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'})}</span></div>`:''}
-        <div class="event-meta-item"><span class="event-meta-label">VENUE</span><span class="event-meta-value">${ev.venue_name}</span></div>
-        <div class="event-meta-item"><span class="event-meta-label">TICKET</span><span class="event-meta-value" style="color:var(--accent-1);font-weight:500">${formatPrice(ev.ticket_price)} / 人</span></div>
+        <div class="event-meta-item">
+          <span class="event-meta-label">DATE & TIME</span>
+          <span class="event-meta-value">${formatDate(ev.event_at)}</span>
+        </div>
+        ${ev.doors_open_at ? `
+        <div class="event-meta-item">
+          <span class="event-meta-label">OPEN</span>
+          <span class="event-meta-value">${new Date(ev.doors_open_at).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'})}</span>
+        </div>` : ''}
+        <div class="event-meta-item">
+          <span class="event-meta-label">VENUE</span>
+          <span class="event-meta-value">${ev.venue_name}</span>
+        </div>
+        <div class="event-meta-item">
+          <span class="event-meta-label">TICKET</span>
+          <span class="event-meta-value" style="color:var(--accent-1);font-weight:500">${formatPrice(ev.ticket_price)} / 人</span>
+        </div>
       </div>
 
-      ${ev.description?`<section class="section"><p class="section-title">ABOUT</p><p style="color:var(--text-sub);line-height:1.9;white-space:pre-line">${ev.description}</p></section>`:''}
-      ${performers?`<section class="section"><p class="section-title">PERFORMERS</p><div class="performer-row">${performers}</div></section>`:''}
-      ${timetable?`<section class="section"><p class="section-title">TIMETABLE</p><div class="timetable">${timetable}</div></section>`:''}
+      ${ev.description ? `
+      <section class="section">
+        <p class="section-title">ABOUT</p>
+        <p style="color:var(--text-sub);line-height:1.9;white-space:pre-line">${ev.description}</p>
+      </section>` : ''}
+
+      ${performers ? `
+      <section class="section">
+        <p class="section-title">PERFORMERS</p>
+        <div class="performer-row">${performers}</div>
+      </section>` : ''}
+
+      ${timetable ? `
+      <section class="section">
+        <p class="section-title">TIMETABLE</p>
+        <div class="timetable">${timetable}</div>
+      </section>` : ''}
 
       <section class="section">
-        <p class="section-title">座席を選ぶ <span style="color:var(--text-sub);font-size:0.75rem;letter-spacing:0.05em;font-family:var(--font-body)">${avail} 席空き</span></p>
-        <div class="stage-label">— STAGE —</div>
-        <div id="seat-grid" class="seat-grid" style="grid-template-columns:repeat(${cols},var(--seat-sz))"></div>
-        <div class="seat-legend">
-          <div class="seat-legend-item"><div class="seat-legend-dot" style="background:rgba(0,212,255,0.08);border:1px solid rgba(0,212,255,0.2)"></div>空席</div>
-          <div class="seat-legend-item"><div class="seat-legend-dot" style="background:var(--accent-1)"></div>選択中</div>
-          <div class="seat-legend-item"><div class="seat-legend-dot" style="background:rgba(255,107,107,0.3)"></div>予約済</div>
-          <div class="seat-legend-item"><div class="seat-legend-dot" style="background:rgba(127,255,212,0.3)"></div>入場済</div>
+        <p class="section-title">
+          座席を選ぶ
+          <span style="color:var(--text-sub);font-size:0.75rem;letter-spacing:0.05em;font-family:var(--font-body)">
+            ${avail} 席空き
+          </span>
+        </p>
+
+        ${seatData.length === 0
+          ? `<div class="no-seats-msg">
+               <p>座席情報がまだ設定されていません</p>
+             </div>`
+          : `${stagePos === 'top' ? stageLabel : ''}
+             <div class="seatmap-wrap">
+               <div class="seatmap-inner">
+                 <div id="seat-grid" class="seat-grid"
+                      style="grid-template-columns:repeat(${cols},var(--seat-sz));width:fit-content">
+                 </div>
+               </div>
+             </div>
+             ${stagePos === 'bottom' ? stageLabel : ''}`}
+
+        <div class="seat-legend" style="margin-top:1rem">
+          <div class="seat-legend-item">
+            <div class="seat-legend-dot" style="background:rgba(0,212,255,0.08);border:1px solid rgba(0,212,255,0.2)"></div>空席
+          </div>
+          <div class="seat-legend-item">
+            <div class="seat-legend-dot" style="background:var(--accent-1)"></div>選択中
+          </div>
+          <div class="seat-legend-item">
+            <div class="seat-legend-dot" style="background:rgba(255,107,107,0.3)"></div>予約済
+          </div>
+          <div class="seat-legend-item">
+            <div class="seat-legend-dot" style="background:rgba(127,255,212,0.3)"></div>入場済
+          </div>
         </div>
       </section>
 
-      ${ev.venue_address?`<section class="section"><p class="section-title">ACCESS</p><p style="color:var(--text-sub);margin-bottom:0.75rem">${ev.venue_address}</p><a href="https://maps.google.com/?q=${encodeURIComponent(ev.venue_address)}" target="_blank" rel="noopener" class="btn btn-ghost btn-sm">Google Map で開く →</a></section>`:''}
+      ${ev.venue_address ? `
+      <section class="section">
+        <p class="section-title">ACCESS</p>
+        <p style="color:var(--text-sub);margin-bottom:0.75rem">${ev.venue_address}</p>
+        <a href="https://maps.google.com/?q=${encodeURIComponent(ev.venue_address)}"
+           target="_blank" rel="noopener" class="btn btn-ghost btn-sm">Google Map で開く →</a>
+      </section>` : ''}
 
       <section class="section">
         <p class="section-title">当日の流れ</p>
@@ -226,130 +355,227 @@ function renderPage(ev, seatData) {
         <div class="flow-step"><div class="flow-num">3</div><span style="color:var(--text-sub)">入場・お席へどうぞ</span></div>
       </section>
 
-      ${ev.notes?`<section class="section"><p class="section-title">NOTES</p><p style="color:var(--text-sub);white-space:pre-line;font-size:0.875rem">${ev.notes}</p></section>`:''}
+      ${ev.notes ? `
+      <section class="section">
+        <p class="section-title">NOTES</p>
+        <p style="color:var(--text-sub);white-space:pre-line;font-size:0.875rem">${ev.notes}</p>
+      </section>` : ''}
     </div>`;
 
-  renderSeats(seatData, cols);
-  document.getElementById('booking-panel').style.display = 'flex';
+  // DOMが確実に存在する状態で座席を描画
+  if (seatData.length > 0) {
+    requestAnimationFrame(() => renderSeats(seatData, meta));
+  }
+
+  document.getElementById('booking-panel').style.display = seatData.length > 0 ? 'flex' : 'none';
 }
 
-function renderSeats(seatData, cols) {
+// ── Render seats ─────────────────────────────────────────────
+function renderSeats(seatData, meta) {
   seats = seatData;
   const grid = document.getElementById('seat-grid');
-  if (!grid) return;
+  if (!grid) {
+    console.error('[JAZZIN] seat-grid not found');
+    return;
+  }
+
+  const aisles    = new Set((meta?.aisles    || []).map(a => `${a.row},${a.col}`));
+  const entrances = new Set((meta?.entrances || []).map(e => `${e.row},${e.col}`));
+
   grid.innerHTML = '';
-  seats.forEach(s => {
+
+  seatData.forEach(s => {
     const el = document.createElement('div');
-    el.className='seat'; el.dataset.id=s.id; el.dataset.label=s.label;
-    el.dataset.status = selectedIds.has(s.id) ? SeatStatus.SELECTED : s.status;
-    el.title = s.label;
-    el.textContent = s.label.split('-')[1] || s.label;
-    el.addEventListener('click', ()=>toggleSeat(s));
+    el.className = 'seat';
+    el.dataset.id    = s.id;
+    el.dataset.label = s.label;
+
+    const key = `${s.row_num},${s.col_num}`;
+    if (aisles.has(key)) {
+      el.dataset.type   = 'aisle';
+      el.dataset.status = 'aisle';
+    } else if (entrances.has(key)) {
+      el.dataset.type   = 'entrance';
+      el.dataset.status = 'entrance';
+      el.textContent    = '出入口';
+    } else {
+      el.dataset.status = selectedIds.has(s.id) ? SeatStatus.SELECTED : s.status;
+      el.title          = s.label;
+      el.textContent    = s.label.split('-')[1] || s.label;
+      el.addEventListener('click', () => toggleSeat(s));
+    }
+
     grid.appendChild(el);
   });
+
+  console.log(`[JAZZIN] ${seatData.length} seats rendered`);
 }
 
 function patchSeat(updated) {
-  const idx = seats.findIndex(s=>s.id===updated.id);
-  if (idx<0) return;
-  seats[idx] = {...seats[idx], ...updated};
+  const idx = seats.findIndex(s => s.id === updated.id);
+  if (idx < 0) return;
+  seats[idx] = { ...seats[idx], ...updated };
   if (selectedIds.has(updated.id)) return;
   const el = document.querySelector(`.seat[data-id="${updated.id}"]`);
-  if (el) el.dataset.status = updated.status;
+  if (el && !el.dataset.type) el.dataset.status = updated.status;
 }
 
 function toggleSeat(seat) {
   if (seat.status !== SeatStatus.AVAILABLE) return;
   const el = document.querySelector(`.seat[data-id="${seat.id}"]`);
   if (!el) return;
-  if (selectedIds.has(seat.id)) { selectedIds.delete(seat.id); el.dataset.status=SeatStatus.AVAILABLE; }
-  else { selectedIds.add(seat.id); el.dataset.status=SeatStatus.SELECTED; }
+  if (selectedIds.has(seat.id)) {
+    selectedIds.delete(seat.id);
+    el.dataset.status = SeatStatus.AVAILABLE;
+  } else {
+    selectedIds.add(seat.id);
+    el.dataset.status = SeatStatus.SELECTED;
+  }
   updateBookingPanel();
 }
 
 function updateBookingPanel() {
   const n = selectedIds.size;
-  document.getElementById('booking-seats-label').textContent = n===0 ? '座席を選んでください' : `${n} 席選択中`;
-  document.getElementById('booking-price-label').textContent = n===0 ? '' : `合計 ${formatPrice(TICKET_PRICE()*n)}（現金払い）`;
-  document.getElementById('btn-reserve').disabled = n===0;
+  document.getElementById('booking-seats-label').textContent =
+    n === 0 ? '座席を選んでください' : `${n} 席選択中`;
+  document.getElementById('booking-price-label').textContent =
+    n === 0 ? '' : `合計 ${formatPrice(TICKET_PRICE() * n)}（現金払い）`;
+  document.getElementById('btn-reserve').disabled = n === 0;
 }
 
+// ── Lock & reserve ───────────────────────────────────────────
 document.addEventListener('click', async e => {
   if (e.target.id !== 'btn-reserve') return;
-  const btn = e.target; btn.disabled=true; btn.textContent='仮ロック中...';
+  const btn = e.target;
+  btn.disabled = true; btn.textContent = '仮ロック中...';
   try {
     const ok = await lockSeats(EVENT_ID, [...selectedIds]);
     if (!ok) {
       showToast('選択した座席が他の方に取られました');
-      seats = await fetchSeats(EVENT_ID); selectedIds.clear();
-      renderSeats(seats, Math.max(...seats.map(s=>s.col_num))); updateBookingPanel();
-      btn.textContent='予約へ進む'; btn.disabled=false; return;
+      seats = await fetchSeats(EVENT_ID);
+      selectedIds.clear();
+      renderSeats(seats, layoutMeta);
+      updateBookingPanel();
+      btn.textContent = '予約へ進む'; btn.disabled = false;
+      return;
     }
-    lockExpiry = Date.now() + 5*60*1000;
-    startLockTimer(); openFormModal();
-  } catch { showToast('エラーが発生しました'); btn.textContent='予約へ進む'; btn.disabled=false; }
+    lockExpiry = Date.now() + 5 * 60 * 1000;
+    startLockTimer();
+    openFormModal();
+  } catch (err) {
+    console.error(err);
+    showToast('エラーが発生しました');
+    btn.textContent = '予約へ進む'; btn.disabled = false;
+  }
 });
 
 function startLockTimer() {
   const timerEl = document.getElementById('lock-timer-el');
   const valEl   = document.getElementById('lock-timer-val');
-  timerEl.style.display='flex';
+  timerEl.style.display = 'flex';
   if (lockTimer) clearInterval(lockTimer);
-  lockTimer = setInterval(()=>{
-    const rem = Math.max(0, lockExpiry-Date.now());
-    const m=Math.floor(rem/60000), s=Math.floor((rem%60000)/1000);
-    valEl.textContent=`${m}:${s.toString().padStart(2,'0')}`;
-    if (rem===0) { clearInterval(lockTimer); closeFormModal(); showToast('仮ロックが切れました。再度選んでください'); selectedIds.clear(); fetchSeats(EVENT_ID).then(s=>{seats=s;renderSeats(s,Math.max(...s.map(x=>x.col_num)));updateBookingPanel();}); timerEl.style.display='none'; }
-  },1000);
+  lockTimer = setInterval(() => {
+    const rem = Math.max(0, lockExpiry - Date.now());
+    const m = Math.floor(rem / 60000);
+    const s = Math.floor((rem % 60000) / 1000);
+    valEl.textContent = `${m}:${s.toString().padStart(2, '0')}`;
+    if (rem === 0) {
+      clearInterval(lockTimer);
+      closeFormModal();
+      showToast('仮ロックが切れました。再度選んでください');
+      selectedIds.clear();
+      fetchSeats(EVENT_ID).then(s => { seats = s; renderSeats(s, layoutMeta); updateBookingPanel(); });
+      timerEl.style.display = 'none';
+    }
+  }, 1000);
 }
 
 function openFormModal() {
-  const n=selectedIds.size;
-  const labels=[...selectedIds].map(id=>seats.find(s=>s.id===id)?.label).join('、');
-  document.getElementById('modal-summary').innerHTML=`<div style="display:flex;flex-direction:column;gap:4px"><div style="color:var(--text-main);font-weight:500">${event.title}</div><div>席: ${labels}</div><div>合計: ${formatPrice(TICKET_PRICE()*n)}（${n}名 × ${formatPrice(TICKET_PRICE())}）</div><div style="margin-top:4px;font-size:0.72rem;color:var(--accent-1)">※当日現金払い</div></div>`;
-  document.getElementById('form-modal').style.display='flex';
-  document.getElementById('btn-reserve').textContent='予約へ進む';
-  document.getElementById('btn-reserve').disabled=false;
+  const n = selectedIds.size;
+  const labels = [...selectedIds].map(id => seats.find(s => s.id === id)?.label).join('、');
+  document.getElementById('modal-summary').innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:4px">
+      <div style="color:var(--text-main);font-weight:500">${event.title}</div>
+      <div>席: ${labels}</div>
+      <div>合計: ${formatPrice(TICKET_PRICE() * n)}（${n}名 × ${formatPrice(TICKET_PRICE())}）</div>
+      <div style="margin-top:4px;font-size:0.72rem;color:var(--accent-1)">※当日現金払い</div>
+    </div>`;
+  document.getElementById('form-modal').style.display = 'flex';
+  document.getElementById('btn-reserve').textContent = '予約へ進む';
+  document.getElementById('btn-reserve').disabled = false;
   validateForm();
 }
-function closeFormModal() { document.getElementById('form-modal').style.display='none'; }
-document.addEventListener('click', e=>{ if(e.target.id==='btn-modal-cancel') closeFormModal(); });
 
-['f-name','f-email'].forEach(id=>{
-  document.addEventListener('input', e=>{ if(e.target.id===id) validateForm(); });
-});
-function validateForm() {
-  const name=document.getElementById('f-name')?.value.trim();
-  const email=document.getElementById('f-email')?.value.trim();
-  const btn=document.getElementById('btn-confirm');
-  if(btn) btn.disabled=!(name&&email&&email.includes('@'));
+function closeFormModal() {
+  document.getElementById('form-modal').style.display = 'none';
 }
 
-document.addEventListener('click', async e=>{
-  if(e.target.id!=='btn-confirm') return;
-  const btn=e.target; btn.disabled=true;
-  document.getElementById('confirm-spinner').style.display='inline-block';
+document.addEventListener('click', e => {
+  if (e.target.id === 'btn-modal-cancel') closeFormModal();
+});
+
+['f-name', 'f-email'].forEach(id => {
+  document.addEventListener('input', e => { if (e.target.id === id) validateForm(); });
+});
+
+function validateForm() {
+  const name  = document.getElementById('f-name')?.value.trim();
+  const email = document.getElementById('f-email')?.value.trim();
+  const btn   = document.getElementById('btn-confirm');
+  if (btn) btn.disabled = !(name && email && email.includes('@'));
+}
+
+document.addEventListener('click', async e => {
+  if (e.target.id !== 'btn-confirm') return;
+  const btn = e.target;
+  btn.disabled = true;
+  document.getElementById('confirm-spinner').style.display = 'inline-block';
   try {
     const result = await confirmReservation({
-      eventId:EVENT_ID, seatIds:[...selectedIds],
-      guestName:document.getElementById('f-name').value.trim(),
-      guestEmail:document.getElementById('f-email').value.trim(),
-      guestPhone:document.getElementById('f-phone').value.trim(),
-      notes:document.getElementById('f-notes').value.trim(),
+      eventId:    EVENT_ID,
+      seatIds:    [...selectedIds],
+      guestName:  document.getElementById('f-name').value.trim(),
+      guestEmail: document.getElementById('f-email').value.trim(),
+      guestPhone: document.getElementById('f-phone').value.trim(),
+      notes:      document.getElementById('f-notes').value.trim(),
     });
-    if (!result.success) { showToast(result.error==='seats_expired_or_taken'?'仮ロックが期限切れです':'エラーが発生しました'); closeFormModal(); return; }
+    if (!result.success) {
+      showToast(result.error === 'seats_expired_or_taken'
+        ? '仮ロックが期限切れです' : 'エラーが発生しました');
+      closeFormModal();
+      return;
+    }
     clearInterval(lockTimer);
-    location.href=`/confirm.html?rid=${result.reservation_id}&token=${result.qr_token}&code=${result.reservation_code}`;
-  } catch { showToast('エラーが発生しました'); btn.disabled=false; document.getElementById('confirm-spinner').style.display='none'; }
+    location.href = `/confirm.html?rid=${result.reservation_id}&token=${result.qr_token}&code=${result.reservation_code}`;
+  } catch (err) {
+    console.error(err);
+    showToast('エラーが発生しました');
+    btn.disabled = false;
+    document.getElementById('confirm-spinner').style.display = 'none';
+  }
 });
 
+// ── Init ─────────────────────────────────────────────────────
 async function init() {
   try {
-    [event, seats] = await Promise.all([fetchEventDetail(EVENT_ID), fetchSeats(EVENT_ID)]);
-    renderPage(event, seats);
+    console.log('[JAZZIN] Loading event:', EVENT_ID);
+    const [ev, seatData, meta] = await Promise.all([
+      fetchEventDetail(EVENT_ID),
+      fetchSeats(EVENT_ID),
+      fetchLayoutMeta(EVENT_ID),
+    ]);
+    console.log('[JAZZIN] seats fetched:', seatData?.length, seatData);
+    event      = ev;
+    layoutMeta = meta;
+    renderPage(ev, seatData || [], meta);
     subscribeSeats(EVENT_ID, patchSeat);
-  } catch { document.getElementById('page-content').innerHTML='<div class="container page"><p>イベントが見つかりません</p></div>'; }
+  } catch (err) {
+    console.error('[JAZZIN] init error:', err);
+    document.getElementById('page-content').innerHTML =
+      '<div class="container page"><p>イベントが見つかりません</p></div>';
+  }
 }
+
 init();
 </script>
 </body>
