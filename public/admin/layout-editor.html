@@ -192,6 +192,7 @@ body { min-height:100dvh; }
       <div class="legend-row"><div class="legend-dot" style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.2)"></div>壁</div>
 
       <div style="margin-top:1.5rem;display:flex;flex-direction:column;gap:0.5rem">
+        <div id="draft-indicator" style="font-size:0.72rem;min-height:1.1em;letter-spacing:0.04em"></div>
         <button class="btn btn-primary btn-full" id="btn-save">💾 保存して反映</button>
         <button class="btn btn-ghost btn-full btn-sm" id="btn-reset">リセット</button>
       </div>
@@ -236,12 +237,96 @@ let rows = 6, cols = 6;
 let grid = []; // grid[row][col] = { type: 'seat'|'aisle'|'entrance'|'stage'|'wall', label: '' }
 let isDragging = false;
 let dragType   = null;
+let autosaveTimer = null;
+let hasUnsavedChanges = false;
 
 function showToast(msg, ms=2000) {
   const t = document.getElementById('toast');
   t.textContent = msg; t.classList.add('show');
   setTimeout(() => t.classList.remove('show'), ms);
 }
+
+// ── Draft autosave (localStorage) ────────────────────────────
+const DRAFT_PREFIX = 'jazzin_layout_draft_';
+
+function draftKey(eventId) { return `${DRAFT_PREFIX}${eventId}`; }
+
+function saveDraft() {
+  if (!currentEventId) return;
+  try {
+    const payload = {
+      rows, cols, stagePosition,
+      grid: gridToArray(),
+      savedAt: new Date().toISOString(),
+    };
+    localStorage.setItem(draftKey(currentEventId), JSON.stringify(payload));
+    setUnsaved(false);
+    updateDraftIndicator('saved');
+  } catch { /* quota exceeded — ignore */ }
+}
+
+function loadDraft(eventId) {
+  try {
+    const raw = localStorage.getItem(draftKey(eventId));
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+
+function clearDraft(eventId) {
+  localStorage.removeItem(draftKey(eventId));
+}
+
+function gridToArray() {
+  const arr = [];
+  for (let r = 1; r <= rows; r++) {
+    for (let c = 1; c <= cols; c++) {
+      arr.push({ r, c, type: grid[r][c].type, label: grid[r][c].label });
+    }
+  }
+  return arr;
+}
+
+function gridFromArray(arr, r, c) {
+  initGrid(r, c);
+  arr.forEach(cell => {
+    if (cell.r <= r && cell.c <= c) {
+      grid[cell.r][cell.c] = { type: cell.type, label: cell.label || '' };
+    }
+  });
+}
+
+function scheduleAutosave() {
+  setUnsaved(true);
+  clearTimeout(autosaveTimer);
+  autosaveTimer = setTimeout(saveDraft, 1500);
+}
+
+function setUnsaved(val) {
+  hasUnsavedChanges = val;
+  updateDraftIndicator(val ? 'unsaved' : 'saved');
+}
+
+function updateDraftIndicator(state) {
+  const el = document.getElementById('draft-indicator');
+  if (!el) return;
+  if (state === 'unsaved') {
+    el.textContent = '● 未保存の変更あり';
+    el.style.color = 'var(--accent-1)';
+  } else if (state === 'saved') {
+    el.textContent = '✓ 下書き保存済み';
+    el.style.color = 'var(--c-green)';
+  } else {
+    el.textContent = '';
+  }
+}
+
+// ページ離脱時の警告
+window.addEventListener('beforeunload', e => {
+  if (hasUnsavedChanges) {
+    e.preventDefault();
+    e.returnValue = '';
+  }
+});
 
 // ── Auth ─────────────────────────────────────────────────────
 async function checkAuth() {
@@ -299,6 +384,29 @@ async function openEditor(ev) {
 
   const meta = evData?.layout_meta || {};
 
+  // ── 下書き復元チェック ──────────────────────────────────────
+  const draft = loadDraft(ev.id);
+  if (draft) {
+    const draftDate = new Date(draft.savedAt).toLocaleString('ja-JP');
+    const useDraft = confirm(`⚠ 前回の未保存の変更が見つかりました\n（${draftDate}）\n\n下書きを復元しますか？\n\n[OK] → 下書きを復元\n[キャンセル] → DBのデータを使用`);
+    if (useDraft) {
+      rows = draft.rows; cols = draft.cols;
+      stagePosition = draft.stagePosition || 'top';
+      document.getElementById('rows-input').value = rows;
+      document.getElementById('cols-input').value = cols;
+      updateStagePosUI();
+      gridFromArray(draft.grid, rows, cols);
+      renderGrid();
+      updateStats();
+      setUnsaved(true);
+      showToast('下書きを復元しました');
+      return;
+    } else {
+      clearDraft(ev.id);
+    }
+  }
+  // ── DB データを使用 ────────────────────────────────────────
+
   if (seats && seats.length > 0) {
     rows = Math.max(...seats.map(s => s.row_num));
     cols = Math.max(...seats.map(s => s.col_num));
@@ -334,6 +442,8 @@ async function openEditor(ev) {
 
   renderGrid();
   updateStats();
+  setUnsaved(false);
+  updateDraftIndicator('');
 }
 
 // ── Grid init ────────────────────────────────────────────────
@@ -413,6 +523,7 @@ function paintCell(r, c) {
   const el = document.querySelector(`.editor-cell[data-row="${r}"][data-col="${c}"]`);
   if (el) applyCell(el, currentTool, grid[r][c].label);
   updateStats();
+  scheduleAutosave();
 }
 
 function updateStats() {
@@ -459,6 +570,7 @@ document.querySelectorAll('.stage-pos-btn').forEach(btn => {
     stagePosition = btn.dataset.pos;
     updateStagePosUI();
     renderGrid();
+    scheduleAutosave();
   });
 });
 
@@ -543,6 +655,9 @@ document.getElementById('btn-save').addEventListener('click', async () => {
     }
 
     showToast(`✓ ${seatCells.length}席を保存しました`);
+    clearDraft(currentEventId);
+    setUnsaved(false);
+    updateDraftIndicator('');
   } catch (err) {
     console.error(err);
     showToast('保存に失敗しました: ' + err.message);

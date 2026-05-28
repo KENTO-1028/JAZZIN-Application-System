@@ -1,0 +1,739 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#000a10">
+<title>JAZZIN — イベント編集</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Cormorant+Garamond:ital,wght@1,300&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="/config.js"></script>
+<link rel="stylesheet" href="/ui/style.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<style>
+body { min-height:100dvh; }
+.edit-page { max-width:720px; margin:0 auto; padding:2rem 1.25rem 6rem; position:relative; z-index:1; }
+
+/* Page title */
+.page-title {
+  font-family:var(--font-display); font-size:2rem; letter-spacing:0.1em;
+  background:var(--grad-text); background-size:200% 200%;
+  -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text;
+  margin-bottom:0.25rem;
+}
+.page-sub { font-family:var(--font-serif); font-style:italic; font-size:0.82rem; color:rgba(200,230,245,0.4); letter-spacing:0.15em; margin-bottom:2rem; }
+
+/* Draft banner */
+.draft-banner {
+  display:flex; align-items:center; justify-content:space-between;
+  gap:1rem; flex-wrap:wrap;
+  background:rgba(0,212,255,0.06);
+  border:1px solid rgba(0,212,255,0.2);
+  border-radius:var(--radius);
+  padding:0.75rem 1rem;
+  margin-bottom:1.5rem;
+  font-size:0.82rem;
+}
+.draft-banner.warn {
+  background:rgba(255,200,0,0.06);
+  border-color:rgba(255,200,0,0.25);
+}
+.draft-label { display:flex; align-items:center; gap:0.5rem; }
+.draft-dot {
+  width:8px; height:8px; border-radius:50%; flex-shrink:0;
+  background:var(--accent-1); box-shadow:0 0 6px var(--accent-1);
+  animation:pulse 2s ease-in-out infinite;
+}
+.draft-dot.warn { background:#ffc800; box-shadow:0 0 6px #ffc800; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+/* Section card */
+.section-card {
+  background:rgba(0,25,45,0.55); backdrop-filter:blur(20px);
+  border:1px solid var(--glass-border);
+  border-radius:var(--radius-lg);
+  overflow:hidden;
+  margin-bottom:1.25rem;
+}
+.section-card-header {
+  background:rgba(0,10,20,0.5);
+  border-bottom:1px solid var(--glass-border);
+  padding:0.85rem 1.25rem;
+  display:flex; align-items:center; gap:0.6rem;
+}
+.section-card-icon { font-size:1rem; }
+.section-card-title { font-family:var(--font-display); font-size:0.85rem; letter-spacing:0.2em; color:var(--text-sub); }
+.section-card-body { padding:1.25rem; display:flex; flex-direction:column; gap:1rem; }
+
+/* Form grid */
+.form-grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:1rem; }
+@media (max-width:520px) { .form-grid-2 { grid-template-columns:1fr; } }
+
+/* Status selector */
+.status-btns { display:flex; gap:0.5rem; flex-wrap:wrap; }
+.status-btn {
+  padding:0.4rem 1rem; border-radius:var(--radius);
+  font-size:0.8rem; font-weight:500; cursor:pointer;
+  border:1px solid var(--glass-border);
+  background:rgba(0,212,255,0.04);
+  color:var(--text-sub); transition:var(--transition);
+  font-family:var(--font-body);
+}
+.status-btn:hover { border-color:rgba(0,212,255,0.3); color:var(--text-main); }
+.status-btn.active[data-val="draft"]     { background:rgba(0,212,255,0.1); border-color:var(--accent-1); color:var(--accent-1); }
+.status-btn.active[data-val="published"] { background:rgba(127,255,212,0.1); border-color:var(--c-green); color:var(--c-green); }
+.status-btn.active[data-val="ended"]     { background:rgba(255,107,107,0.08); border-color:var(--c-red); color:var(--c-red); }
+
+/* Performer / timetable row */
+.dynamic-rows { display:flex; flex-direction:column; gap:0.5rem; }
+.dynamic-row { display:flex; gap:0.5rem; align-items:center; }
+.dynamic-row .form-input { flex:1; }
+.btn-remove-row {
+  width:32px; height:32px; border-radius:6px; flex-shrink:0;
+  background:rgba(255,107,107,0.08); border:1px solid rgba(255,107,107,0.2);
+  color:var(--c-red); cursor:pointer; font-size:1rem;
+  display:flex; align-items:center; justify-content:center;
+  transition:var(--transition);
+}
+.btn-remove-row:hover { background:rgba(255,107,107,0.18); }
+.btn-add-row {
+  display:flex; align-items:center; gap:0.4rem;
+  font-size:0.78rem; color:var(--text-sub); cursor:pointer;
+  background:none; border:1px dashed rgba(100,200,255,0.15);
+  border-radius:var(--radius); padding:0.5rem 0.75rem;
+  width:100%; justify-content:center; transition:var(--transition);
+  font-family:var(--font-body);
+}
+.btn-add-row:hover { border-color:rgba(0,212,255,0.3); color:var(--accent-1); }
+
+/* Bottom actions bar */
+.actions-bar {
+  position:fixed; bottom:0; left:0; right:0;
+  background:rgba(0,10,16,0.92); backdrop-filter:blur(20px);
+  border-top:1px solid var(--glass-border);
+  padding:0.9rem 1.25rem; z-index:50;
+}
+.actions-bar-inner {
+  max-width:720px; margin:0 auto;
+  display:flex; align-items:center; gap:0.75rem; flex-wrap:wrap;
+}
+.autosave-label {
+  flex:1; font-size:0.75rem; color:var(--text-sub);
+  display:flex; align-items:center; gap:0.4rem;
+}
+.autosave-label .dot { width:6px; height:6px; border-radius:50%; background:var(--c-dim); }
+.autosave-label .dot.saving { background:var(--accent-1); animation:pulse 1s infinite; }
+.autosave-label .dot.saved  { background:var(--c-green); }
+
+/* New event badge */
+.new-badge {
+  display:inline-block; padding:0.15rem 0.5rem;
+  background:rgba(0,212,255,0.1); border:1px solid rgba(0,212,255,0.25);
+  border-radius:4px; font-size:0.68rem; letter-spacing:0.1em; color:var(--accent-1);
+  vertical-align:middle; margin-left:0.5rem;
+}
+</style>
+</head>
+<body>
+
+<div class="aurora-wrap">
+  <div class="aurora-blob"></div>
+  <div class="aurora-blob"></div>
+  <div class="aurora-blob"></div>
+</div>
+
+<header class="header">
+  <div class="header-inner">
+    <a href="/admin/index.html" class="logo"><img src="/assets/jazzin_logo.png" alt="JAZZIN" height="26"></a>
+    <div style="display:flex;gap:0.5rem;align-items:center">
+      <span id="header-status" style="font-size:0.75rem;color:var(--text-sub)"></span>
+      <a href="/admin/index.html" class="btn btn-ghost btn-sm">← 管理画面</a>
+    </div>
+  </div>
+</header>
+
+<div id="toast"></div>
+
+<div id="auth-guard" style="display:none;text-align:center;padding:4rem">
+  <p style="margin-bottom:1rem">管理者ログインが必要です</p>
+  <a href="/admin/login.html" class="btn btn-primary">ログイン</a>
+</div>
+
+<div id="app" style="display:none">
+  <div id="loading-screen" style="text-align:center;padding:5rem 1rem">
+    <div class="spinner" style="margin:0 auto 1rem"></div>
+    <p style="font-size:0.875rem;color:var(--text-sub)">読み込み中...</p>
+  </div>
+
+  <div id="edit-screen" style="display:none">
+    <div class="edit-page">
+
+      <!-- Header -->
+      <div class="page-title" id="page-title">イベント編集</div>
+      <p class="page-sub" id="page-sub">Event Settings</p>
+
+      <!-- Draft restore banner (shown when draft exists) -->
+      <div id="draft-banner" class="draft-banner warn" style="display:none">
+        <div class="draft-label">
+          <div class="draft-dot warn"></div>
+          <span id="draft-banner-msg" style="color:#ffc800">前回の未保存の変更が見つかりました</span>
+        </div>
+        <div style="display:flex;gap:0.5rem">
+          <button class="btn btn-ghost btn-sm" id="btn-restore-draft">↩ 復元する</button>
+          <button class="btn btn-ghost btn-sm" id="btn-discard-draft" style="color:var(--c-red)">✕ 破棄</button>
+        </div>
+      </div>
+
+      <!-- ① 基本情報 -->
+      <div class="section-card">
+        <div class="section-card-header">
+          <span class="section-card-icon">🎵</span>
+          <span class="section-card-title">基本情報</span>
+        </div>
+        <div class="section-card-body">
+          <div class="form-group">
+            <label class="form-label">イベントタイトル *</label>
+            <input type="text" class="form-input" id="f-title" placeholder="例: Jazz Night Vol.12">
+          </div>
+          <div class="form-grid-2">
+            <div class="form-group">
+              <label class="form-label">開催日時 *</label>
+              <input type="datetime-local" class="form-input" id="f-event-at">
+            </div>
+            <div class="form-group">
+              <label class="form-label">開場時刻</label>
+              <input type="datetime-local" class="form-input" id="f-doors-open">
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">説明・概要</label>
+            <textarea class="form-input" id="f-description" rows="4" placeholder="イベントの説明文..."></textarea>
+          </div>
+          <div class="form-group">
+            <label class="form-label">ヒーロー画像URL</label>
+            <input type="url" class="form-input" id="f-hero-image" placeholder="https://...">
+          </div>
+        </div>
+      </div>
+
+      <!-- ② 会場 -->
+      <div class="section-card">
+        <div class="section-card-header">
+          <span class="section-card-icon">📍</span>
+          <span class="section-card-title">会場情報</span>
+        </div>
+        <div class="section-card-body">
+          <div class="form-grid-2">
+            <div class="form-group">
+              <label class="form-label">会場名 *</label>
+              <input type="text" class="form-input" id="f-venue-name" placeholder="例: Jazz Bar BLUE NOTE">
+            </div>
+            <div class="form-group">
+              <label class="form-label">住所</label>
+              <input type="text" class="form-input" id="f-venue-address" placeholder="例: 東京都渋谷区...">
+            </div>
+          </div>
+          <div class="form-grid-2">
+            <div class="form-group">
+              <label class="form-label">緯度（任意）</label>
+              <input type="number" class="form-input" id="f-lat" placeholder="35.6812" step="0.0001">
+            </div>
+            <div class="form-group">
+              <label class="form-label">経度（任意）</label>
+              <input type="number" class="form-input" id="f-lng" placeholder="139.7671" step="0.0001">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ③ チケット -->
+      <div class="section-card">
+        <div class="section-card-header">
+          <span class="section-card-icon">🎫</span>
+          <span class="section-card-title">チケット・定員</span>
+        </div>
+        <div class="section-card-body">
+          <div class="form-grid-2">
+            <div class="form-group">
+              <label class="form-label">チケット料金（円）*</label>
+              <input type="number" class="form-input" id="f-ticket-price" placeholder="3000" min="0" step="100">
+            </div>
+            <div class="form-group">
+              <label class="form-label">定員（席数）</label>
+              <input type="number" class="form-input" id="f-capacity" placeholder="50" min="1">
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">注意事項・備考</label>
+            <textarea class="form-input" id="f-notes" rows="3" placeholder="当日の注意事項など..."></textarea>
+          </div>
+        </div>
+      </div>
+
+      <!-- ④ 出演者 -->
+      <div class="section-card">
+        <div class="section-card-header">
+          <span class="section-card-icon">🎷</span>
+          <span class="section-card-title">出演者</span>
+        </div>
+        <div class="section-card-body">
+          <div id="performers-list" class="dynamic-rows"></div>
+          <button class="btn-add-row" id="btn-add-performer">＋ 出演者を追加</button>
+        </div>
+      </div>
+
+      <!-- ⑤ タイムテーブル -->
+      <div class="section-card">
+        <div class="section-card-header">
+          <span class="section-card-icon">🕐</span>
+          <span class="section-card-title">タイムテーブル</span>
+        </div>
+        <div class="section-card-body">
+          <div id="timetable-list" class="dynamic-rows"></div>
+          <button class="btn-add-row" id="btn-add-timetable">＋ タイムテーブルを追加</button>
+        </div>
+      </div>
+
+      <!-- ⑥ 公開設定 -->
+      <div class="section-card">
+        <div class="section-card-header">
+          <span class="section-card-icon">📢</span>
+          <span class="section-card-title">公開設定</span>
+        </div>
+        <div class="section-card-body">
+          <div class="form-group">
+            <label class="form-label">ステータス</label>
+            <div class="status-btns">
+              <button class="status-btn" data-val="draft">下書き</button>
+              <button class="status-btn" data-val="published">公開</button>
+              <button class="status-btn" data-val="ended">終了</button>
+            </div>
+            <input type="hidden" id="f-status" value="draft">
+            <p style="font-size:0.72rem;color:var(--text-sub);margin-top:0.4rem">「下書き」の状態では一般ユーザーに表示されません</p>
+          </div>
+          <div class="form-group">
+            <label class="form-label">公開開始日時（任意）</label>
+            <input type="datetime-local" class="form-input" id="f-publish-at">
+            <p style="font-size:0.72rem;color:var(--text-sub);margin-top:0.25rem">設定するとこの日時以降に自動的に一覧へ表示されます</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Seat layout link -->
+      <div id="seat-layout-link" style="display:none;margin-bottom:1.25rem">
+        <a id="btn-go-layout" href="#" class="btn btn-ghost btn-full">
+          🗺 座席レイアウトエディタを開く
+        </a>
+      </div>
+
+    </div><!-- .edit-page -->
+  </div><!-- #edit-screen -->
+</div><!-- #app -->
+
+<!-- Fixed bottom actions bar -->
+<div class="actions-bar" id="actions-bar" style="display:none">
+  <div class="actions-bar-inner">
+    <div class="autosave-label">
+      <div class="dot" id="autosave-dot"></div>
+      <span id="autosave-label-text">自動保存: 待機中</span>
+    </div>
+    <button class="btn btn-ghost" id="btn-discard-changes" style="color:var(--c-red)">変更を破棄</button>
+    <button class="btn btn-primary btn-lg" id="btn-save-event">
+      <span id="save-spinner" class="spinner" style="display:none"></span>
+      💾 保存する
+    </button>
+  </div>
+</div>
+
+<script type="module">
+import { supabase } from '/core/supabase.js';
+
+// ── Utils ─────────────────────────────────────────────────────
+function showToast(msg, ms=2500) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), ms);
+}
+
+function $(id) { return document.getElementById(id); }
+
+// ── Draft system ──────────────────────────────────────────────
+const DRAFT_KEY_PREFIX = 'jazzin_event_draft_';
+
+function draftKey(id) { return `${DRAFT_KEY_PREFIX}${id}`; }
+
+let EVENT_ID    = null;   // null = 新規
+let isNewEvent  = false;
+let autosaveTimer = null;
+let draftData   = null;   // currently stored draft
+
+function saveDraft() {
+  const data = collectFormData();
+  data._savedAt = new Date().toISOString();
+  try {
+    localStorage.setItem(draftKey(EVENT_ID || '_new'), JSON.stringify(data));
+  } catch { /* quota */ }
+  setAutosaveState('saved');
+}
+
+function loadStoredDraft(id) {
+  try {
+    const raw = localStorage.getItem(draftKey(id || '_new'));
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+
+function clearStoredDraft(id) {
+  localStorage.removeItem(draftKey(id || '_new'));
+}
+
+function scheduleAutosave() {
+  setAutosaveState('saving');
+  clearTimeout(autosaveTimer);
+  autosaveTimer = setTimeout(saveDraft, 1500);
+}
+
+function setAutosaveState(state) {
+  const dot  = $('autosave-dot');
+  const lbl  = $('autosave-label-text');
+  if (!dot || !lbl) return;
+  dot.className = 'dot ' + state;
+  if (state === 'saving') lbl.textContent = '自動保存中...';
+  else if (state === 'saved') {
+    const t = new Date().toLocaleTimeString('ja-JP', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+    lbl.textContent = `下書き保存済み ${t}`;
+  } else {
+    lbl.textContent = '自動保存: 待機中';
+  }
+}
+
+// ── ページ離脱警告 ────────────────────────────────────────────
+let hasUnsaved = false;
+
+function markDirty() {
+  hasUnsaved = true;
+  scheduleAutosave();
+}
+
+window.addEventListener('beforeunload', e => {
+  if (hasUnsaved) { e.preventDefault(); e.returnValue = ''; }
+});
+
+// ── Form collection / population ──────────────────────────────
+function collectFormData() {
+  return {
+    title:         $('f-title')?.value.trim() || '',
+    event_at:      $('f-event-at')?.value || null,
+    doors_open_at: $('f-doors-open')?.value || null,
+    description:   $('f-description')?.value.trim() || null,
+    hero_image_url:$('f-hero-image')?.value.trim() || null,
+    venue_name:    $('f-venue-name')?.value.trim() || '',
+    venue_address: $('f-venue-address')?.value.trim() || null,
+    venue_lat:     parseFloat($('f-lat')?.value) || null,
+    venue_lng:     parseFloat($('f-lng')?.value) || null,
+    ticket_price:  parseInt($('f-ticket-price')?.value) || 500,
+    capacity:      parseInt($('f-capacity')?.value) || null,
+    notes:         $('f-notes')?.value.trim() || null,
+    status:        $('f-status')?.value || 'draft',
+    publish_at:    $('f-publish-at')?.value || null,
+    performers:    collectDynamicRows('performers-list', ['name', 'role']),
+    timetable:     collectDynamicRows('timetable-list',  ['time', 'act']),
+  };
+}
+
+function collectDynamicRows(listId, fields) {
+  const rows = document.querySelectorAll(`#${listId} .dynamic-row`);
+  const result = [];
+  rows.forEach(row => {
+    const obj = {};
+    fields.forEach(f => {
+      obj[f] = row.querySelector(`[data-field="${f}"]`)?.value.trim() || '';
+    });
+    if (Object.values(obj).some(v => v)) result.push(obj);
+  });
+  return result;
+}
+
+function populateForm(data) {
+  const set = (id, val) => { const el = $(id); if (el && val != null) el.value = val; };
+
+  set('f-title',        data.title);
+  set('f-event-at',     data.event_at ? toLocalDatetime(data.event_at) : '');
+  set('f-doors-open',   data.doors_open_at ? toLocalDatetime(data.doors_open_at) : '');
+  set('f-description',  data.description);
+  set('f-hero-image',   data.hero_image_url);
+  set('f-venue-name',   data.venue_name);
+  set('f-venue-address',data.venue_address);
+  set('f-lat',          data.venue_lat);
+  set('f-lng',          data.venue_lng);
+  set('f-ticket-price', data.ticket_price);
+  set('f-capacity',     data.capacity);
+  set('f-notes',        data.notes);
+  set('f-publish-at',   data.publish_at ? toLocalDatetime(data.publish_at) : '');
+
+  // Status buttons
+  const status = data.status || 'draft';
+  $('f-status').value = status;
+  document.querySelectorAll('.status-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.val === status);
+  });
+
+  // Performers
+  const perfList = $('performers-list');
+  perfList.innerHTML = '';
+  (data.performers || []).forEach(p => addPerformerRow(p.name, p.role));
+
+  // Timetable
+  const ttList = $('timetable-list');
+  ttList.innerHTML = '';
+  (data.timetable || []).forEach(t => addTimetableRow(t.time, t.act));
+}
+
+function toLocalDatetime(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d)) return '';
+  const pad = n => String(n).padStart(2,'0');
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+// ── Dynamic rows ──────────────────────────────────────────────
+function addPerformerRow(name='', role='') {
+  const list = $('performers-list');
+  const row  = document.createElement('div');
+  row.className = 'dynamic-row';
+  row.innerHTML = `
+    <input type="text" class="form-input" data-field="name" placeholder="田中 一郎" value="${esc(name)}" style="flex:1.5">
+    <input type="text" class="form-input" data-field="role" placeholder="ピアノ" value="${esc(role)}" style="flex:1">
+    <button type="button" class="btn-remove-row" title="削除">×</button>`;
+  row.querySelector('.btn-remove-row').addEventListener('click', () => { row.remove(); markDirty(); });
+  row.querySelectorAll('.form-input').forEach(el => el.addEventListener('input', markDirty));
+  list.appendChild(row);
+}
+
+function addTimetableRow(time='', act='') {
+  const list = $('timetable-list');
+  const row  = document.createElement('div');
+  row.className = 'dynamic-row';
+  row.innerHTML = `
+    <input type="text" class="form-input" data-field="time" placeholder="19:00" value="${esc(time)}" style="max-width:100px">
+    <input type="text" class="form-input" data-field="act"  placeholder="オープニングセット" value="${esc(act)}" style="flex:1">
+    <button type="button" class="btn-remove-row" title="削除">×</button>`;
+  row.querySelector('.btn-remove-row').addEventListener('click', () => { row.remove(); markDirty(); });
+  row.querySelectorAll('.form-input').forEach(el => el.addEventListener('input', markDirty));
+  list.appendChild(row);
+}
+
+function esc(str) { return String(str||'').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
+
+// ── Auth ──────────────────────────────────────────────────────
+async function checkAuth() {
+  const { data } = await supabase.auth.getUser();
+  if (!data?.user) { $('auth-guard').style.display='block'; return false; }
+  $('app').style.display = 'block';
+  return true;
+}
+
+// ── Load event ────────────────────────────────────────────────
+async function loadEvent(id) {
+  const { data, error } = await supabase
+    .from('events')
+    .select('id, title, description, performers, timetable, venue_name, venue_address, venue_lat, venue_lng, event_at, doors_open_at, hero_image_url, ticket_price, notes, capacity, status, publish_at')
+    .eq('id', id)
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+// ── Save event ────────────────────────────────────────────────
+async function saveEvent() {
+  const btn     = $('btn-save-event');
+  const spinner = $('save-spinner');
+  btn.disabled  = true;
+  spinner.style.display = 'inline-block';
+
+  try {
+    const data = collectFormData();
+
+    // Validation
+    if (!data.title)      { showToast('⚠ タイトルを入力してください'); throw new Error('validation'); }
+    if (!data.venue_name) { showToast('⚠ 会場名を入力してください'); throw new Error('validation'); }
+    if (!data.ticket_price || data.ticket_price < 0) { showToast('⚠ チケット料金を入力してください'); throw new Error('validation'); }
+
+    // datetime-local → ISO
+    const toISO = v => v ? new Date(v).toISOString() : null;
+    const payload = {
+      ...data,
+      event_at:      toISO(data.event_at),
+      doors_open_at: toISO(data.doors_open_at),
+      publish_at:    toISO(data.publish_at),
+    };
+    delete payload._savedAt;
+
+    let savedId = EVENT_ID;
+
+    if (EVENT_ID) {
+      const { error } = await supabase.from('events').update(payload).eq('id', EVENT_ID);
+      if (error) throw error;
+    } else {
+      const { data: inserted, error } = await supabase.from('events').insert(payload).select('id').single();
+      if (error) throw error;
+      savedId = inserted.id;
+      EVENT_ID = savedId;
+      isNewEvent = false;
+      // URL を更新して戻る時にリロードしない
+      history.replaceState({}, '', `?id=${savedId}`);
+      $('btn-go-layout').href = `/admin/layout-editor.html?event_id=${savedId}`;
+      $('seat-layout-link').style.display = 'block';
+    }
+
+    // Draft cleared after DB save
+    clearStoredDraft(EVENT_ID);
+    clearStoredDraft('_new');
+    hasUnsaved = false;
+    setAutosaveState('');
+    $('autosave-label-text').textContent = '✓ 保存しました';
+
+    showToast('✓ イベントを保存しました');
+
+    // ヘッダーのステータス更新
+    updateHeaderStatus(payload.status);
+
+  } catch (err) {
+    if (err.message !== 'validation') {
+      console.error(err);
+      showToast('保存に失敗しました: ' + (err.message || err));
+    }
+  }
+
+  btn.disabled = false;
+  spinner.style.display = 'none';
+}
+
+function updateHeaderStatus(status) {
+  const labels = { draft:'下書き', published:'公開中', ended:'終了' };
+  $('header-status').textContent = labels[status] || status;
+}
+
+// ── Init ──────────────────────────────────────────────────────
+async function init() {
+  const ok = await checkAuth();
+  if (!ok) return;
+
+  const params = new URLSearchParams(location.search);
+  EVENT_ID = params.get('id') || null;
+  isNewEvent = !EVENT_ID;
+
+  // Show loading
+  $('loading-screen').style.display = 'block';
+  $('edit-screen').style.display   = 'none';
+  $('actions-bar').style.display   = 'none';
+
+  try {
+    let dbData = null;
+
+    if (EVENT_ID) {
+      dbData = await loadEvent(EVENT_ID);
+      $('page-title').textContent = 'イベント編集';
+      updateHeaderStatus(dbData.status);
+      $('btn-go-layout').href = `/admin/layout-editor.html?event_id=${EVENT_ID}`;
+      $('seat-layout-link').style.display = 'block';
+    } else {
+      $('page-title').innerHTML = 'イベント作成 <span class="new-badge">NEW</span>';
+      $('page-sub').textContent = 'Create New Event';
+    }
+
+    // ── Check for existing draft ────────────────────────────
+    const stored = loadStoredDraft(EVENT_ID || '_new');
+    draftData = stored;
+
+    if (stored) {
+      const draftDate = new Date(stored._savedAt).toLocaleString('ja-JP');
+      $('draft-banner-msg').textContent = `前回の未保存の変更（${draftDate}）が見つかりました`;
+      $('draft-banner').style.display = 'flex';
+
+      // デフォルトは下書きを表示
+      populateForm(stored);
+    } else if (dbData) {
+      populateForm(dbData);
+    } else {
+      // 新規: デフォルト値
+      populateForm({ status: 'draft', ticket_price: 3000 });
+    }
+
+  } catch (err) {
+    console.error(err);
+    showToast('読み込みに失敗しました');
+    // エラーでもフォームは表示
+  }
+
+  $('loading-screen').style.display = 'none';
+  $('edit-screen').style.display   = 'block';
+  $('actions-bar').style.display   = 'flex';
+
+  // Attach change listeners to all static inputs
+  document.querySelectorAll('#edit-screen .form-input, #edit-screen textarea')
+    .forEach(el => el.addEventListener('input', markDirty));
+
+  // Status buttons
+  document.querySelectorAll('.status-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.status-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      $('f-status').value = btn.dataset.val;
+      markDirty();
+    });
+  });
+
+  // Dynamic row add buttons
+  $('btn-add-performer').addEventListener('click', () => { addPerformerRow(); markDirty(); });
+  $('btn-add-timetable').addEventListener('click', () => { addTimetableRow(); markDirty(); });
+
+  // Draft banner actions
+  $('btn-restore-draft').addEventListener('click', () => {
+    if (draftData) { populateForm(draftData); showToast('↩ 下書きを復元しました'); }
+    $('draft-banner').style.display = 'none';
+  });
+
+  $('btn-discard-draft').addEventListener('click', () => {
+    clearStoredDraft(EVENT_ID || '_new');
+    draftData = null;
+    $('draft-banner').style.display = 'none';
+    // Re-load DB data
+    if (EVENT_ID) {
+      loadEvent(EVENT_ID).then(data => {
+        populateForm(data);
+        showToast('✕ 下書きを破棄しました');
+      });
+    } else {
+      populateForm({ status: 'draft', ticket_price: 3000 });
+      showToast('✕ 下書きを破棄しました');
+    }
+  });
+
+  // Discard all changes
+  $('btn-discard-changes').addEventListener('click', async () => {
+    if (!confirm('変更をすべて破棄しますか？\n保存されていない内容は失われます。')) return;
+    clearStoredDraft(EVENT_ID || '_new');
+    hasUnsaved = false;
+    if (EVENT_ID) {
+      try {
+        const data = await loadEvent(EVENT_ID);
+        populateForm(data);
+        showToast('変更を破棄しました');
+      } catch { showToast('読み込みに失敗しました'); }
+    } else {
+      populateForm({ status: 'draft', ticket_price: 3000 });
+      showToast('変更を破棄しました');
+    }
+  });
+
+  // Save button
+  $('btn-save-event').addEventListener('click', saveEvent);
+}
+
+init();
+</script>
+</body>
+</html>
