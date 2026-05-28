@@ -330,10 +330,17 @@ window.addEventListener('beforeunload', e => {
 
 // ── Auth ─────────────────────────────────────────────────────
 async function checkAuth() {
-  const { data } = await supabase.auth.getUser();
-  if (!data?.user) {
+  // getSession() はローカルストレージのトークンを使いRLSに必要なJWTをセットする
+  // getUser() はサーバー検証だがセッション再セットを行わない場合がある
+  const { data, error } = await supabase.auth.getSession();
+  if (error || !data?.session) {
     document.getElementById('auth-guard').style.display = 'block';
     return false;
+  }
+  // セッションが古ければリフレッシュ
+  const expiresAt = data.session.expires_at * 1000;
+  if (expiresAt - Date.now() < 10 * 60 * 1000) {
+    await supabase.auth.refreshSession();
   }
   document.getElementById('app').style.display = 'block';
   return true;
@@ -608,18 +615,36 @@ document.getElementById('btn-save').addEventListener('click', async () => {
   btn.disabled = true; btn.textContent = '保存中...';
 
   try {
+    // ── セッション確認・リフレッシュ ────────────────────────
+    const { data: sessionData, error: sessionErr } = await supabase.auth.getSession();
+    if (sessionErr || !sessionData?.session) {
+      showToast('セッションが切れています。再ログインしてください');
+      setTimeout(() => { location.href = '/admin/login.html?next=' + encodeURIComponent(location.href); }, 1500);
+      btn.disabled = false; btn.textContent = '💾 保存して反映';
+      return;
+    }
+
+    // トークンが5分以内に期限切れなら先にリフレッシュ
+    const expiresAt = sessionData.session.expires_at * 1000;
+    if (expiresAt - Date.now() < 5 * 60 * 1000) {
+      const { error: refreshErr } = await supabase.auth.refreshSession();
+      if (refreshErr) {
+        console.warn('[JAZZIN] session refresh failed:', refreshErr);
+      }
+    }
+
     assignLabels();
 
-    const seatCells     = [];
-    const aisles        = [];
-    const entrances     = [];
-    const stages        = [];
-    const walls         = [];
+    const seatCells = [];
+    const aisles    = [];
+    const entrances = [];
+    const stages    = [];
+    const walls     = [];
 
     for (let r = 1; r <= rows; r++) {
       for (let c = 1; c <= cols; c++) {
         const cell = grid[r][c];
-        if (cell.type === 'seat')     seatCells.push({ row:r, col:c, label:cell.label });
+        if (cell.type === 'seat')          seatCells.push({ row:r, col:c, label:cell.label });
         else if (cell.type === 'aisle')    aisles.push({ row:r, col:c });
         else if (cell.type === 'entrance') entrances.push({ row:r, col:c });
         else if (cell.type === 'stage')    stages.push({ row:r, col:c });
@@ -627,31 +652,44 @@ document.getElementById('btn-save').addEventListener('click', async () => {
       }
     }
 
-    // layout_meta を events テーブルに保存
+    // ── layout_meta を events テーブルに保存 ─────────────────
     const layoutMeta = { stage_position:stagePosition, aisles, entrances, stages, walls, rows, cols };
     const { error: metaErr } = await supabase
       .from('events')
       .update({ layout_meta: layoutMeta })
       .eq('id', currentEventId);
-    if (metaErr) throw metaErr;
+    if (metaErr) {
+      console.error('[JAZZIN] events update error:', metaErr);
+      throw new Error(`イベント更新失敗 (${metaErr.code}): ${metaErr.message}`);
+    }
 
-    // seats テーブルを更新（削除→挿入）
+    // ── seats: 削除→挿入 ─────────────────────────────────────
     const { error: delErr } = await supabase
       .from('seats')
       .delete()
       .eq('event_id', currentEventId);
-    if (delErr) throw delErr;
+    if (delErr) {
+      console.error('[JAZZIN] seats delete error:', delErr);
+      throw new Error(`座席削除失敗 (${delErr.code}): ${delErr.message}`);
+    }
 
     if (seatCells.length > 0) {
-      const insertData = seatCells.map(s => ({
-        event_id: currentEventId,
-        row_num:  s.row,
-        col_num:  s.col,
-        label:    s.label,
-        status:   'available',
-      }));
-      const { error: insErr } = await supabase.from('seats').insert(insertData);
-      if (insErr) throw insErr;
+      // 大量データは100件ずつ分割してinsert
+      const CHUNK = 100;
+      for (let i = 0; i < seatCells.length; i += CHUNK) {
+        const chunk = seatCells.slice(i, i + CHUNK).map(s => ({
+          event_id: currentEventId,
+          row_num:  s.row,
+          col_num:  s.col,
+          label:    s.label,
+          status:   'available',
+        }));
+        const { error: insErr } = await supabase.from('seats').insert(chunk);
+        if (insErr) {
+          console.error('[JAZZIN] seats insert error:', insErr);
+          throw new Error(`座席登録失敗 (${insErr.code}): ${insErr.message}`);
+        }
+      }
     }
 
     showToast(`✓ ${seatCells.length}席を保存しました`);
@@ -659,8 +697,8 @@ document.getElementById('btn-save').addEventListener('click', async () => {
     setUnsaved(false);
     updateDraftIndicator('');
   } catch (err) {
-    console.error(err);
-    showToast('保存に失敗しました: ' + err.message);
+    console.error('[JAZZIN] save error:', err);
+    showToast('保存に失敗: ' + (err.message || err));
   }
 
   btn.disabled = false; btn.textContent = '💾 保存して反映';
