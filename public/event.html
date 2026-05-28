@@ -63,6 +63,49 @@ body { min-height:100dvh; }
   min-width: 100%;
 }
 
+/* ── Stage bar ── */
+.stage-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  background: linear-gradient(135deg, rgba(0,50,80,0.6), rgba(0,100,140,0.4));
+  border: 1px solid rgba(0,212,255,0.25);
+  border-radius: 6px;
+  font-family: var(--font-display);
+  letter-spacing: 0.3em;
+  font-size: 0.8rem;
+  color: rgba(0,212,255,0.7);
+  box-shadow: 0 0 20px rgba(0,212,255,0.08) inset;
+  margin-bottom: 0.75rem;
+  margin-top: 0.25rem;
+  min-height: 36px;
+}
+.stage-bar.stage-bottom { margin-bottom: 0.25rem; margin-top: 0.75rem; }
+
+/* ── Seatmap with side stage ── */
+.seatmap-with-side {
+  display: flex;
+  align-items: stretch;
+  gap: 0.75rem;
+}
+.stage-bar-side {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(180deg, rgba(0,50,80,0.6), rgba(0,100,140,0.4));
+  border: 1px solid rgba(0,212,255,0.25);
+  border-radius: 6px;
+  font-family: var(--font-display);
+  letter-spacing: 0.25em;
+  font-size: 0.72rem;
+  color: rgba(0,212,255,0.7);
+  box-shadow: 0 0 20px rgba(0,212,255,0.08) inset;
+  writing-mode: vertical-rl;
+  min-width: 36px;
+  padding: 0.75rem 0;
+}
+
 /* ── Layout special cells ── */
 .seat[data-type="aisle"] {
   background: transparent !important;
@@ -231,10 +274,25 @@ async function fetchLayoutMeta(eventId) {
 }
 
 // ── Render full page ─────────────────────────────────────────
+function buildSeatmapHtml(stagePos, cols, ds) {
+  const stageText = ds.stageLabel || '— STAGE —';
+  const stageH    = ds.stageHeight || 36;
+  const stageBar  = `<div class="stage-bar" style="height:${stageH}px">${stageText}</div>`;
+  const stageSide = `<div class="stage-bar-side" style="min-width:${stageH}px">${stageText}</div>`;
+  const gridEl = `<div class="seatmap-wrap"><div class="seatmap-inner"><div id="seat-grid" class="seat-grid" style="grid-template-columns:repeat(${cols},var(--seat-sz));width:fit-content"></div></div></div>`;
+
+  if (stagePos === 'top')    return `${stageBar}${gridEl}`;
+  if (stagePos === 'bottom') return `${gridEl}<div class="stage-bar stage-bottom" style="height:${stageH}px">${stageText}</div>`;
+  if (stagePos === 'left')   return `<div class="seatmap-with-side">${stageSide}${gridEl}</div>`;
+  if (stagePos === 'right')  return `<div class="seatmap-with-side">${gridEl}${stageSide}</div>`;
+  return gridEl;
+}
+
 function renderPage(ev, seatData, meta) {
   const rows = seatData.length > 0 ? Math.max(...seatData.map(s => s.row_num)) : 6;
   const cols = seatData.length > 0 ? Math.max(...seatData.map(s => s.col_num)) : 6;
   const avail = seatData.filter(s => s.status === SeatStatus.AVAILABLE).length;
+  const ds    = meta?.display_settings || { seatSize:36, seatGap:5, stageHeight:36, stageLabel:'— STAGE —' };
 
   const performers = Array.isArray(ev.performers)
     ? ev.performers.map(p => `
@@ -251,7 +309,6 @@ function renderPage(ev, seatData, meta) {
         </div>`).join('') : '';
 
   const stagePos = meta?.stage_position || 'top';
-  const stageLabel = `<div class="stage-label">— STAGE —</div>`;
 
   document.getElementById('page-content').innerHTML = `
     ${ev.hero_image_url
@@ -314,15 +371,7 @@ function renderPage(ev, seatData, meta) {
           ? `<div class="no-seats-msg">
                <p>座席情報がまだ設定されていません</p>
              </div>`
-          : `${stagePos === 'top' ? stageLabel : ''}
-             <div class="seatmap-wrap">
-               <div class="seatmap-inner">
-                 <div id="seat-grid" class="seat-grid"
-                      style="grid-template-columns:repeat(${cols},var(--seat-sz));width:fit-content">
-                 </div>
-               </div>
-             </div>
-             ${stagePos === 'bottom' ? stageLabel : ''}`}
+          : buildSeatmapHtml(stagePos, cols, ds)}
 
         <div class="seat-legend" style="margin-top:1rem">
           <div class="seat-legend-item">
@@ -378,6 +427,24 @@ function renderSeats(seatData, meta) {
     console.error('[JAZZIN] seat-grid not found');
     return;
   }
+
+  // Apply display settings from layout_meta
+  const ds = meta?.display_settings || {};
+  const seatSize   = ds.seatSize   || 36;
+  const seatGap    = ds.seatGap    || 5;
+
+  // Override CSS variables for this event
+  document.documentElement.style.setProperty('--seat-sz', `${seatSize}px`);
+  document.documentElement.style.setProperty('--seat-gap', `${seatGap}px`);
+  grid.style.gap = `${seatGap}px`;
+  // Force all seats to use the configured size
+  const seatStyle = document.getElementById('dynamic-seat-style') || (() => {
+    const s = document.createElement('style');
+    s.id = 'dynamic-seat-style';
+    document.head.appendChild(s);
+    return s;
+  })();
+  seatStyle.textContent = `.seat { width:${seatSize}px !important; height:${seatSize}px !important; font-size:${Math.max(8, seatSize * 0.35)}px !important; }`;
 
   const aisles    = new Set((meta?.aisles    || []).map(a => `${a.row},${a.col}`));
   const entrances = new Set((meta?.entrances || []).map(e => `${e.row},${e.col}`));

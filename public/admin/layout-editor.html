@@ -184,6 +184,33 @@ body { min-height:100dvh; }
         <div></div>
       </div>
 
+      <p class="sidebar-title">表示サイズ設定</p>
+      <div class="form-group" style="margin-bottom:0.5rem">
+        <label class="form-label">座席サイズ (px)</label>
+        <div style="display:flex;align-items:center;gap:0.5rem">
+          <input type="range" id="seat-size-range" min="24" max="64" value="36" style="flex:1;accent-color:var(--accent-1)">
+          <span id="seat-size-val" style="font-size:0.78rem;color:var(--accent-1);min-width:28px;text-align:right">36</span>
+        </div>
+      </div>
+      <div class="form-group" style="margin-bottom:0.5rem">
+        <label class="form-label">座席間隔 (px)</label>
+        <div style="display:flex;align-items:center;gap:0.5rem">
+          <input type="range" id="seat-gap-range" min="2" max="12" value="5" style="flex:1;accent-color:var(--accent-1)">
+          <span id="seat-gap-val" style="font-size:0.78rem;color:var(--accent-1);min-width:28px;text-align:right">5</span>
+        </div>
+      </div>
+      <div class="form-group" style="margin-bottom:0.5rem">
+        <label class="form-label">ステージ高さ (px)</label>
+        <div style="display:flex;align-items:center;gap:0.5rem">
+          <input type="range" id="stage-height-range" min="24" max="80" value="36" style="flex:1;accent-color:var(--accent-1)">
+          <span id="stage-height-val" style="font-size:0.78rem;color:var(--accent-1);min-width:28px;text-align:right">36</span>
+        </div>
+      </div>
+      <div class="form-group" style="margin-bottom:0.75rem">
+        <label class="form-label">ステージテキスト</label>
+        <input type="text" class="form-input" id="stage-label-input" value="— STAGE —" style="padding:0.35rem 0.6rem;font-size:0.82rem">
+      </div>
+
       <p class="sidebar-title">凡例</p>
       <div class="legend-row"><div class="legend-dot" style="background:rgba(0,212,255,0.1);border:1px solid rgba(0,212,255,0.3)"></div>座席</div>
       <div class="legend-row"><div class="legend-dot" style="background:transparent;border:1px solid rgba(255,255,255,0.05)"></div>通路</div>
@@ -210,14 +237,14 @@ body { min-height:100dvh; }
       </div>
 
       <!-- Stage indicator (top) -->
-      <div id="stage-indicator-top" class="stage-label" style="margin-bottom:0.75rem">— STAGE —</div>
+      <div id="stage-indicator-top" class="stage-label" style="margin-bottom:0.75rem;display:flex;align-items:center;justify-content:center">— STAGE —</div>
 
       <div class="grid-editor-wrap">
         <div id="grid-editor" class="grid-editor"></div>
       </div>
 
       <!-- Stage indicator (bottom) -->
-      <div id="stage-indicator-bottom" class="stage-label" style="margin-top:0.75rem;display:none">— STAGE —</div>
+      <div id="stage-indicator-bottom" class="stage-label" style="margin-top:0.75rem;display:none;align-items:center;justify-content:center">— STAGE —</div>
 
       <p style="font-size:0.72rem;color:var(--c-dim);margin-top:0.75rem">
         💡 ドラッグで連続描画できます。保存すると座席テーブルに反映されます。
@@ -240,6 +267,73 @@ let dragType   = null;
 let autosaveTimer = null;
 let hasUnsavedChanges = false;
 
+// ── Display settings ─────────────────────────────────────────
+let displaySettings = {
+  seatSize:    36,
+  seatGap:     5,
+  stageHeight: 36,
+  stageLabel:  '— STAGE —',
+};
+
+function initDisplayControls() {
+  const seatSizeRange   = document.getElementById('seat-size-range');
+  const seatGapRange    = document.getElementById('seat-gap-range');
+  const stageHeightRange= document.getElementById('stage-height-range');
+  const stageLabelInput = document.getElementById('stage-label-input');
+
+  function syncVal(rangeEl, valEl, key) {
+    rangeEl.addEventListener('input', () => {
+      const v = parseInt(rangeEl.value);
+      document.getElementById(valEl).textContent = v;
+      displaySettings[key] = v;
+      applyDisplaySettings();
+      scheduleAutosave();
+    });
+  }
+  syncVal(seatSizeRange,    'seat-size-val',    'seatSize');
+  syncVal(seatGapRange,     'seat-gap-val',     'seatGap');
+  syncVal(stageHeightRange, 'stage-height-val', 'stageHeight');
+
+  stageLabelInput.addEventListener('input', () => {
+    displaySettings.stageLabel = stageLabelInput.value;
+    renderGrid();
+    scheduleAutosave();
+  });
+}
+
+function applyDisplaySettings() {
+  const grid = document.getElementById('grid-editor');
+  if (!grid) return;
+  grid.style.gap = `${displaySettings.seatGap}px`;
+  // update cell sizes
+  document.querySelectorAll('.editor-cell').forEach(c => {
+    c.style.width  = `${displaySettings.seatSize}px`;
+    c.style.height = `${displaySettings.seatSize}px`;
+  });
+  // stage indicator height
+  ['stage-indicator-top','stage-indicator-bottom'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.height = `${displaySettings.stageHeight}px`;
+  });
+}
+
+function populateDisplayControls(ds) {
+  displaySettings = { ...displaySettings, ...ds };
+  const r = (id, val) => {
+    const el = document.getElementById(id);
+    if (el) el.value = val;
+  };
+  const s = (id, val) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = val;
+  };
+  r('seat-size-range',    displaySettings.seatSize);    s('seat-size-val',    displaySettings.seatSize);
+  r('seat-gap-range',     displaySettings.seatGap);     s('seat-gap-val',     displaySettings.seatGap);
+  r('stage-height-range', displaySettings.stageHeight); s('stage-height-val', displaySettings.stageHeight);
+  const lbl = document.getElementById('stage-label-input');
+  if (lbl) lbl.value = displaySettings.stageLabel;
+}
+
 function showToast(msg, ms=2000) {
   const t = document.getElementById('toast');
   t.textContent = msg; t.classList.add('show');
@@ -254,11 +348,7 @@ function draftKey(eventId) { return `${DRAFT_PREFIX}${eventId}`; }
 function saveDraft() {
   if (!currentEventId) return;
   try {
-    const payload = {
-      rows, cols, stagePosition,
-      grid: gridToArray(),
-      savedAt: new Date().toISOString(),
-    };
+    const payload = getDraftPayload();
     localStorage.setItem(draftKey(currentEventId), JSON.stringify(payload));
     setUnsaved(false);
     updateDraftIndicator('saved');
@@ -284,6 +374,15 @@ function gridToArray() {
     }
   }
   return arr;
+}
+
+function getDraftPayload() {
+  return {
+    rows, cols, stagePosition,
+    displaySettings: { ...displaySettings },
+    grid: gridToArray(),
+    savedAt: new Date().toISOString(),
+  };
 }
 
 function gridFromArray(arr, r, c) {
@@ -402,6 +501,7 @@ async function openEditor(ev) {
       document.getElementById('rows-input').value = rows;
       document.getElementById('cols-input').value = cols;
       updateStagePosUI();
+      if (draft.displaySettings) populateDisplayControls(draft.displaySettings);
       gridFromArray(draft.grid, rows, cols);
       renderGrid();
       updateStats();
@@ -423,6 +523,8 @@ async function openEditor(ev) {
 
   stagePosition = meta.stage_position || 'top';
   updateStagePosUI();
+  if (meta.display_settings) populateDisplayControls(meta.display_settings);
+  else populateDisplayControls({ seatSize:36, seatGap:5, stageHeight:36, stageLabel:'— STAGE —' });
 
   const aisles    = new Set((meta.aisles    || []).map(a => `${a.row},${a.col}`));
   const entrances = new Set((meta.entrances || []).map(e => `${e.row},${e.col}`));
@@ -512,8 +614,26 @@ function renderGrid() {
   // Stage indicators
   const top    = document.getElementById('stage-indicator-top');
   const bottom = document.getElementById('stage-indicator-bottom');
-  top.style.display    = stagePosition === 'top'    ? 'block' : 'none';
-  bottom.style.display = stagePosition === 'bottom' ? 'block' : 'none';
+  top.style.display    = stagePosition === 'top'    ? 'flex' : 'none';
+  bottom.style.display = stagePosition === 'bottom' ? 'flex' : 'none';
+  [top, bottom].forEach(el => {
+    if (el) {
+      el.textContent = displaySettings.stageLabel || '— STAGE —';
+      el.style.height = `${displaySettings.stageHeight}px`;
+    }
+  });
+
+  // Apply cell sizes
+  requestAnimationFrame(() => {
+    const gridEl = document.getElementById('grid-editor');
+    if (gridEl) {
+      gridEl.style.gap = `${displaySettings.seatGap}px`;
+      document.querySelectorAll('.editor-cell').forEach(c => {
+        c.style.width  = `${displaySettings.seatSize}px`;
+        c.style.height = `${displaySettings.seatSize}px`;
+      });
+    }
+  });
 
   updateStats();
 }
@@ -653,7 +773,11 @@ document.getElementById('btn-save').addEventListener('click', async () => {
     }
 
     // ── layout_meta を events テーブルに保存 ─────────────────
-    const layoutMeta = { stage_position:stagePosition, aisles, entrances, stages, walls, rows, cols };
+    const layoutMeta = {
+      stage_position:   stagePosition,
+      display_settings: { ...displaySettings },
+      aisles, entrances, stages, walls, rows, cols
+    };
     const { error: metaErr } = await supabase
       .from('events')
       .update({ layout_meta: layoutMeta })
@@ -708,6 +832,8 @@ document.getElementById('btn-save').addEventListener('click', async () => {
 async function init() {
   const ok = await checkAuth();
   if (!ok) return;
+
+  initDisplayControls();
 
   const params = new URLSearchParams(location.search);
   const eid = params.get('event_id');
