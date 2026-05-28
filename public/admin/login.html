@@ -12,8 +12,8 @@
 <link rel="stylesheet" href="/ui/style.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <style>
-body { display:flex; align-items:center; justify-content:center; min-height:100dvh; overflow:hidden; }
-.login-wrap { width:100%; max-width:380px; padding:1.5rem; position:relative; z-index:1; }
+body { display:flex; align-items:center; justify-content:center; min-height:100dvh; overflow:hidden; padding: env(safe-area-inset-top,0) env(safe-area-inset-right,0) env(safe-area-inset-bottom,0) env(safe-area-inset-left,0); }
+.login-wrap { width:100%; max-width:380px; padding:clamp(1rem,4vw,1.5rem); position:relative; z-index:1; }
 .login-logo {
   text-align:center;
   font-family: var(--font-display);

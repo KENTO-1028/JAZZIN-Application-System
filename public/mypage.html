@@ -14,7 +14,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <style>
 body { min-height:100dvh; }
-.mypage { max-width:600px; margin:0 auto; padding:2rem 1.25rem 5rem; position:relative; z-index:1; }
+.mypage { max-width:600px; margin:0 auto; padding:clamp(1.25rem,4vw,2rem) var(--page-px,1.25rem) 5rem; position:relative; z-index:1; }
 .page-title {
   font-family:var(--font-display);
   font-size:2.2rem; letter-spacing:0.1em;
@@ -43,7 +43,7 @@ body { min-height:100dvh; }
 .rsv-code { font-family:var(--font-display); font-size:1.3rem; letter-spacing:0.1em; color:var(--accent-1); }
 .rsv-status-badge { font-size:0.7rem; }
 .rsv-body { padding:1rem 1.2rem; }
-.rsv-row { display:flex; justify-content:space-between; font-size:0.85rem; padding:0.4rem 0; border-bottom:1px solid rgba(100,200,255,0.05); }
+.rsv-row { display:flex; justify-content:space-between; gap:0.5rem; font-size:0.85rem; padding:0.4rem 0; border-bottom:1px solid rgba(100,200,255,0.05); flex-wrap:wrap; }
 .rsv-row:last-child { border-bottom:none; }
 .rsv-row-label { color:var(--text-sub); }
 .rsv-row-value { color:var(--text-main); font-weight:500; }
@@ -61,7 +61,9 @@ body { min-height:100dvh; }
   margin-bottom:1.5rem;
 }
 .search-title { font-size:0.72rem; letter-spacing:0.15em; color:var(--text-sub); margin-bottom:0.75rem; font-family:var(--font-display); }
-.search-row { display:flex; gap:0.75rem; }
+.search-row { display:flex; gap:0.75rem; flex-wrap:wrap; }
+.search-row .form-input { min-width:0; flex:1 1 200px; }
+.search-row .btn { flex-shrink:0; }
 </style>
 </head>
 <body>

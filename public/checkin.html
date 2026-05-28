@@ -58,22 +58,23 @@ body { background:#000508; overflow-x:hidden; }
 .guest-card.state-done  { border-color:rgba(127,255,212,0.4); background:rgba(0,40,30,0.7); }
 .guest-card.state-error { border-color:rgba(255,107,107,0.4); background:rgba(50,10,10,0.7); }
 
-.g-name  { font-family:var(--font-display); font-size:2.4rem; letter-spacing:0.04em; line-height:1; margin-bottom:0.4rem; color:#fff; }
+.g-name  { font-family:var(--font-display); font-size:clamp(1.6rem,6vw,2.4rem); letter-spacing:0.04em; line-height:1; margin-bottom:0.4rem; color:#fff; }
 .g-seats { font-size:1.2rem; font-weight:500; color:var(--accent-1); margin-bottom:0.25rem; }
 .g-meta  { font-size:0.82rem; color:var(--text-sub); display:flex; gap:0.75rem; flex-wrap:wrap; margin-bottom:0.75rem; }
 .g-price-label { font-size:0.65rem; letter-spacing:0.15em; color:var(--text-sub); margin-bottom:2px; font-family:var(--font-display); }
-.g-price { font-family:var(--font-display); font-size:2.2rem; letter-spacing:0.06em; color:#fff; }
+.g-price { font-family:var(--font-display); font-size:clamp(1.5rem,5vw,2.2rem); letter-spacing:0.06em; color:#fff; }
 
 /* Big action buttons */
 .action-row { display:flex; gap:0.6rem; margin-top:1rem; }
 .btn-checkin {
-  flex:1; height:64px; font-family:var(--font-display); font-size:1.3rem; letter-spacing:0.08em;
+  flex:1; height:clamp(52px,8vw,64px); font-family:var(--font-display); font-size:clamp(1.1rem,3.5vw,1.3rem); letter-spacing:0.08em;
   border-radius:12px;
   background:linear-gradient(135deg, #0077b6, var(--accent-1));
   color:#000a10; border:none; cursor:pointer;
   display:flex; align-items:center; justify-content:center; gap:8px;
   box-shadow:0 0 30px rgba(0,212,255,0.25);
   transition:80ms;
+  -webkit-tap-highlight-color:transparent;
 }
 .btn-checkin:active { transform:scale(0.97); }
 .btn-checkin:disabled { background:rgba(100,200,255,0.1); color:var(--text-sub); cursor:not-allowed; box-shadow:none; }
@@ -88,6 +89,7 @@ body { background:#000508; overflow-x:hidden; }
 /* Stats bar */
 .stats-bar {
   display:flex; gap:0.5rem; padding:0.75rem 1rem;
+  padding-bottom:calc(0.75rem + env(safe-area-inset-bottom,0px));
   background:rgba(0,8,16,0.9); border-top:1px solid var(--glass-border);
 }
 .stat-item { display:flex; flex-direction:column; align-items:center; gap:1px; flex:1; }

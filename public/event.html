@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#000a10">
 <title>JAZZIN — イベント詳細</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -20,7 +20,7 @@ body { min-height:100dvh; }
   display:flex; align-items:center; justify-content:center;
   border-bottom:1px solid var(--glass-border);
 }
-.event-meta-row { display:flex; gap:1.5rem; flex-wrap:wrap; margin:1.2rem 0; }
+.event-meta-row { display:grid; grid-template-columns:repeat(auto-fill,minmax(120px,1fr)); gap:0.75rem 1.5rem; margin:1.2rem 0; }
 .event-meta-item { display:flex; flex-direction:column; gap:3px; }
 .event-meta-label { font-size:0.65rem; letter-spacing:0.15em; color:var(--text-sub); font-family:var(--font-display); }
 .event-meta-value { font-size:0.9rem; color:var(--text-main); }
@@ -134,11 +134,11 @@ body { min-height:100dvh; }
   position:fixed; bottom:0; left:0; right:0;
   background:rgba(0,10,16,0.92); backdrop-filter:blur(20px);
   border-top:1px solid var(--glass-border);
-  padding:0.9rem 0; z-index:50;
+  padding:0.9rem 0 calc(0.9rem + env(safe-area-inset-bottom,0px)); z-index:50;
 }
 .booking-inner {
-  max-width:920px; margin:0 auto; padding:0 1.25rem;
-  display:flex; align-items:center; gap:1rem; flex-wrap:wrap;
+  max-width:var(--container-w,920px); margin:0 auto; padding:0 var(--page-px,1.25rem);
+  display:flex; align-items:center; gap:0.75rem; flex-wrap:wrap;
 }
 .booking-seats { font-family:var(--font-display); font-size:1.2rem; letter-spacing:0.05em; color:var(--text-main); }
 .booking-price { font-size:0.82rem; color:var(--accent-1); }
@@ -154,7 +154,7 @@ body { min-height:100dvh; }
 .modal {
   background:rgba(0,20,38,0.95); backdrop-filter:blur(24px);
   border:1px solid var(--glass-border); border-radius:var(--radius-lg);
-  width:100%; max-width:460px; max-height:90dvh; overflow-y:auto; padding:1.75rem;
+  width:100%; max-width:460px; max-height:min(90dvh,600px); overflow-y:auto; padding:clamp(1rem,4vw,1.75rem);
   box-shadow:0 20px 60px rgba(0,0,0,0.7);
 }
 .modal-title { font-family:var(--font-display); font-size:1.4rem; letter-spacing:0.08em; margin-bottom:1.3rem; }
@@ -279,7 +279,7 @@ function buildSeatmapHtml(stagePos, cols, ds) {
   const stageH    = ds.stageHeight || 36;
   const stageBar  = `<div class="stage-bar" style="height:${stageH}px">${stageText}</div>`;
   const stageSide = `<div class="stage-bar-side" style="min-width:${stageH}px">${stageText}</div>`;
-  const gridEl = `<div class="seatmap-wrap"><div class="seatmap-inner"><div id="seat-grid" class="seat-grid" style="grid-template-columns:repeat(${cols},var(--seat-sz));width:fit-content"></div></div></div>`;
+  const gridEl = `<div class="seatmap-outer"><div class="seatmap-center"><div id="seat-grid" class="seat-grid" style="grid-template-columns:repeat(${cols},var(--seat-sz));width:fit-content"></div></div></div>`;
 
   if (stagePos === 'top')    return `${stageBar}${gridEl}`;
   if (stagePos === 'bottom') return `${gridEl}<div class="stage-bar stage-bottom" style="height:${stageH}px">${stageText}</div>`;
