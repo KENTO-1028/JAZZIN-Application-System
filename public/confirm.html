@@ -13,7 +13,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+<!-- ✅ EmailJS削除済み -->
 <style>
 body { min-height:100dvh; }
 .confirm-page { max-width:520px; margin:0 auto; padding:clamp(1.25rem,4vw,2rem) var(--page-px,1.25rem) 6rem; position:relative; z-index:1; }
@@ -158,39 +158,47 @@ const RESERVATION_ID = params.get('rid');
 const QR_TOKEN       = params.get('token');
 const RSV_CODE       = params.get('code');
 
+// ✅ Edge FunctionのURL（あなたのプロジェクトID）
+const EDGE_FUNCTION_URL = 'https://kzdsrysnngnfupmszzvz.supabase.co/functions/v1/send-confirmation-email';
+
 function showToast(msg, ms=2000) {
   const t = document.getElementById('toast');
   t.textContent = msg; t.classList.add('show');
   setTimeout(() => t.classList.remove('show'), ms);
 }
 
-// Phase 7: EmailJS初期化
-if (window.__JAZZIN_EMAILJS_PUBLIC_KEY__) {
-  emailjs.init(window.__JAZZIN_EMAILJS_PUBLIC_KEY__);
-}
-
-async function sendConfirmEmail({ toEmail, toName, eventTitle, eventAt, venueName, seats, numSeats, price, reservationCode, notes }) {
-  if (!window.__JAZZIN_EMAILJS_SERVICE_ID__ || !window.__JAZZIN_EMAILJS_TEMPLATE_ID__) return;
+// ✅ Gmail API経由でメール送信
+async function sendConfirmEmail({ toEmail, toName, eventTitle, eventAt, venueName, seats, numSeats, price, reservationCode, calendarUrl, notes }) {
   try {
-    await emailjs.send(
-      window.__JAZZIN_EMAILJS_SERVICE_ID__,
-      window.__JAZZIN_EMAILJS_TEMPLATE_ID__,
-      {
-        to_email:         toEmail,
-        to_name:          toName,
-        event_title:      eventTitle,
-        event_at:         formatDate(eventAt),
-        venue_name:       venueName,
-        seats:            seats,
-        num_seats:        numSeats,
-        price:            formatPrice(price * numSeats),
-        reservation_code: reservationCode,
-        notes:            notes || '',
-      }
-    );
-    console.log('確認メール送信完了');
+    const res = await fetch(EDGE_FUNCTION_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        to_email: toEmail,
+        to_name:  toName,
+        variables: {
+          guest_name:       toName,
+          reservation_code: reservationCode,
+          event_title:      eventTitle,
+          event_at:         formatDate(eventAt),
+          venue_name:       venueName,
+          seats:            seats,
+          num_seats:        String(numSeats),
+          price:            String(price * numSeats),
+          qr_url:           `https://jazzin-application-system.pages.dev/confirm.html?rid=${RESERVATION_ID}&token=${QR_TOKEN}&code=${reservationCode}`,
+          calendar_url:     calendarUrl || '',
+          notes:            notes || '',
+        },
+      }),
+    });
+    const data = await res.json();
+    if (data.success) {
+      console.log('予約確認メール送信完了');
+    } else {
+      console.warn('メール送信失敗:', data.error);
+    }
   } catch (err) {
-    console.warn('メール送信失敗:', err);
+    console.warn('メール送信エラー（予約は完了済み）:', err);
   }
 }
 
@@ -230,17 +238,19 @@ async function loadReservation() {
       mapBtn.style.display = 'flex';
     }
 
+    // カレンダーURL生成
+    let calendarUrl = '';
     if (ev?.event_at) {
       const start = new Date(ev.event_at);
       const end   = new Date(start.getTime() + 3*60*60*1000);
       const fmt   = d => d.toISOString().replace(/[-:]/g,'').replace(/\.\d+/,'');
-      document.getElementById('btn-calendar').href =
-        `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(ev.title)}&dates=${fmt(start)}/${fmt(end)}&location=${encodeURIComponent(ev.venue_name||'')}`;
+      calendarUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(ev.title)}&dates=${fmt(start)}/${fmt(end)}&location=${encodeURIComponent(ev.venue_name||'')}`;
+      document.getElementById('btn-calendar').href = calendarUrl;
     }
 
     renderQR(QR_TOKEN);
 
-    // Phase 7: 予約確認メール送信（初回のみ）
+    // ✅ Gmail API経由でメール送信（初回のみ）
     const mailSentKey = `mail_sent_${RESERVATION_ID}`;
     if (!sessionStorage.getItem(mailSentKey)) {
       sessionStorage.setItem(mailSentKey, '1');
@@ -254,6 +264,7 @@ async function loadReservation() {
         numSeats:        rsv.num_seats,
         price,
         reservationCode: rsv.reservation_code,
+        calendarUrl,
         notes:           ev?.notes || '',
       });
     }
