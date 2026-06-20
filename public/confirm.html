@@ -167,13 +167,14 @@ function showToast(msg, ms=2000) {
   setTimeout(() => t.classList.remove('show'), ms);
 }
 
-// ✅ Gmail API経由でメール送信
-async function sendConfirmEmail({ toEmail, toName, eventTitle, eventAt, venueName, seats, numSeats, price, reservationCode, calendarUrl, notes }) {
+// ✅ Gmail API経由でメール送信（重複防止はサーバー側のDBフラグで管理）
+async function sendConfirmEmail({ reservationId, toEmail, toName, eventTitle, eventAt, venueName, seats, numSeats, price, reservationCode, calendarUrl, notes }) {
   try {
     const res = await fetch(EDGE_FUNCTION_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        reservation_id: reservationId,   // ✅ 追加：サーバー側で重複送信を判定するために必須
         to_email: toEmail,
         to_name:  toName,
         variables: {
@@ -193,7 +194,11 @@ async function sendConfirmEmail({ toEmail, toName, eventTitle, eventAt, venueNam
     });
     const data = await res.json();
     if (data.success) {
-      console.log('予約確認メール送信完了');
+      if (data.skipped) {
+        console.log('メールは送信済みのためスキップしました');
+      } else {
+        console.log('予約確認メール送信完了');
+      }
     } else {
       console.warn('メール送信失敗:', data.error);
     }
@@ -250,24 +255,22 @@ async function loadReservation() {
 
     renderQR(QR_TOKEN);
 
-    // ✅ Gmail API経由でメール送信（初回のみ）
-    const mailSentKey = `mail_sent_${RESERVATION_ID}`;
-    if (!sessionStorage.getItem(mailSentKey)) {
-      sessionStorage.setItem(mailSentKey, '1');
-      sendConfirmEmail({
-        toEmail:         rsv.guest_email,
-        toName:          rsv.guest_name,
-        eventTitle:      ev?.title || '',
-        eventAt:         ev?.event_at || '',
-        venueName:       ev?.venue_name || '',
-        seats,
-        numSeats:        rsv.num_seats,
-        price,
-        reservationCode: rsv.reservation_code,
-        calendarUrl,
-        notes:           ev?.notes || '',
-      });
-    }
+    // ✅ Gmail API経由でメール送信
+    // sessionStorageでのチェックは廃止（サーバー側のDBフラグで確実に1回だけ送信される）
+    sendConfirmEmail({
+      reservationId:   RESERVATION_ID,
+      toEmail:         rsv.guest_email,
+      toName:          rsv.guest_name,
+      eventTitle:      ev?.title || '',
+      eventAt:         ev?.event_at || '',
+      venueName:       ev?.venue_name || '',
+      seats,
+      numSeats:        rsv.num_seats,
+      price,
+      reservationCode: rsv.reservation_code,
+      calendarUrl,
+      notes:           ev?.notes || '',
+    });
 
     // マイページ用にlocalStorageへ保存
     const myRsvs = JSON.parse(localStorage.getItem('jazzin_myreservations') || '[]');
