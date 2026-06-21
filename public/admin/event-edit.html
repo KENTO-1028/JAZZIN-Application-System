@@ -495,7 +495,18 @@ function toLocalDatetime(iso) {
   const d = new Date(iso);
   if (isNaN(d)) return '';
   const pad = n => String(n).padStart(2,'0');
+  // ✅ ローカルタイムゾーンの各コンポーネントを使用（UTCではない）
   return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+// ✅ datetime-local の値（ローカル時刻文字列）→ ISOString に変換する際、
+//    new Date("2025-07-01T19:00") はシステムのローカルTZとして解釈されるため正しい。
+//    ただし Safari 対策で "T" の前後をそのまま使い、明示的に toISOString() する。
+function localDatetimeToISO(val) {
+  if (!val) return null;
+  // "YYYY-MM-DDTHH:mm" 形式 → Dateはローカルとして解釈 → ISOString(UTC)で保存
+  const d = new Date(val);
+  return isNaN(d) ? null : d.toISOString();
 }
 
 // ── Dynamic rows ──────────────────────────────────────────────
@@ -561,13 +572,12 @@ async function saveEvent() {
     if (!data.venue_name) { showToast('⚠ 会場名を入力してください'); throw new Error('validation'); }
     if (!data.ticket_price || data.ticket_price < 0) { showToast('⚠ チケット料金を入力してください'); throw new Error('validation'); }
 
-    // datetime-local → ISO
-    const toISO = v => v ? new Date(v).toISOString() : null;
+    // datetime-local（ローカル時刻）→ ISO（UTC）
     const payload = {
       ...data,
-      event_at:      toISO(data.event_at),
-      doors_open_at: toISO(data.doors_open_at),
-      publish_at:    toISO(data.publish_at),
+      event_at:      localDatetimeToISO(data.event_at),
+      doors_open_at: localDatetimeToISO(data.doors_open_at),
+      publish_at:    localDatetimeToISO(data.publish_at),
     };
     delete payload._savedAt;
 

@@ -38,11 +38,13 @@ body { background:#000508; overflow-x:hidden; }
 .scan-frame > span::after  { bottom:-1px; right:-1px; border-width:0 2px 2px 0; border-radius:0 0 3px 0; }
 
 .scan-line {
-  position:absolute; left:10px; right:10px; height:1px;
+  position:absolute; left:10px; right:10px; height:2px;
   background:linear-gradient(90deg, transparent, var(--accent-1), transparent);
+  box-shadow: 0 0 6px var(--accent-1);
   animation:scanAnim 2s ease-in-out infinite;
+  top:10px;
 }
-@keyframes scanAnim { 0%{top:10px} 50%{top:188px} 100%{top:10px} }
+@keyframes scanAnim { 0%{top:10px} 50%{top:178px} 100%{top:10px} }
 .scan-status { position:absolute; bottom:12px; left:0; right:0; text-align:center; font-size:0.72rem; color:rgba(200,230,245,0.5); letter-spacing:0.1em; }
 
 /* Result */
@@ -155,8 +157,10 @@ body { background:#000508; overflow-x:hidden; }
     <div class="camera-zone">
       <div id="reader"></div>
       <div class="scan-overlay">
-        <div class="scan-frame"><span></span></div>
-        <div class="scan-line"></div>
+        <div class="scan-frame">
+          <span></span>
+          <div class="scan-line"></div>
+        </div>
       </div>
       <div class="scan-status" id="scan-status">QRコードを枠内に合わせてください</div>
     </div>

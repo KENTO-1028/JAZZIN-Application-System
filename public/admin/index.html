@@ -392,16 +392,37 @@ function renderEventsList() {
         <div style="font-size:0.8rem;color:var(--c-muted)">${formatDate(ev.event_at)} — ${formatPrice(ev.ticket_price)}</div>
       </div>
       <span class="badge ${ev.status==='published'?'badge-ok':'badge-admin'}">${ev.status}</span>
-      <button class="btn btn-ghost btn-sm" data-edit="${ev.id}">編集</button>
+      <a href="/admin/event-edit.html?id=${ev.id}" class="btn btn-ghost btn-sm">編集</a>
+      <button class="btn btn-ghost btn-sm" data-delete="${ev.id}" style="color:var(--c-red);border-color:rgba(255,107,107,0.2)" title="削除">🗑</button>
     </div>`).join('');
 
-  el.querySelectorAll('[data-edit]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const ev = allEvents.find(e=>e.id===btn.dataset.edit);
-      if (ev) openEventForm(ev);
+  // ✅ 削除ボタン
+  el.querySelectorAll('[data-delete]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const ev = allEvents.find(e => e.id === btn.dataset.delete);
+      if (!ev) return;
+      if (!confirm(`「${ev.title}」を削除しますか？\n関連する座席・予約データもすべて削除されます。この操作は取り消せません。`)) return;
+      btn.disabled = true; btn.textContent = '削除中...';
+      try {
+        // 関連データを順番に削除（外部キー制約対応）
+        await supabase.from('checkins').delete().eq('event_id', ev.id);
+        const { data: rsvs } = await supabase.from('reservations').select('id').eq('event_id', ev.id);
+        if (rsvs?.length) {
+          await supabase.from('reservation_seats').delete().in('reservation_id', rsvs.map(r => r.id));
+        }
+        await supabase.from('reservations').delete().eq('event_id', ev.id);
+        await supabase.from('seats').delete().eq('event_id', ev.id);
+        const { error } = await supabase.from('events').delete().eq('id', ev.id);
+        if (error) throw error;
+        showToast('イベントを削除しました');
+        await loadAllEvents();
+      } catch (err) {
+        showToast('削除失敗: ' + (err.message || 'エラー'));
+        btn.disabled = false; btn.textContent = '🗑';
+      }
     });
   });
-}
+} // renderEventsList END
 
 // ── Event form ───────────────────────────────────────────────
 let editingEventId = null;
@@ -470,21 +491,55 @@ document.getElementById('btn-event-cancel').addEventListener('click', () => {
   }
 });
 
-function openEventForm(ev) {
+// ✅ ローカル時刻文字列（datetime-local用）に変換
+function toLocalDatetimeStr(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d)) return '';
+  const pad = n => String(n).padStart(2,'0');
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+async function openEventForm(ev) {
   editingEventId = ev?.id || null;
   document.getElementById('event-form-title').textContent = ev ? 'イベント編集' : 'イベント作成';
 
   if (ev) {
-    // 既存イベント編集：DBの値をセット
-    document.getElementById('ef-title').value      = ev.title || '';
-    document.getElementById('ef-venue').value      = ev.venue_name || '';
-    const evAtDate = ev.event_at ? new Date(ev.event_at) : null;
-    document.getElementById('ef-event-at').value = evAtDate && !isNaN(evAtDate) ? evAtDate.toISOString().slice(0,16) : '';
-    const doorsDate = ev.doors_open_at ? new Date(ev.doors_open_at) : null;
-    document.getElementById('ef-doors-at').value = doorsDate && !isNaN(doorsDate) ? doorsDate.toISOString().slice(0,16) : '';
-    document.getElementById('ef-price').value      = ev.ticket_price || 500;
-    document.getElementById('ef-capacity').value   = ev.capacity || 36;
-    document.getElementById('ef-status').value     = ev.status || 'draft';
+    // ✅ 一覧取得時は全フィールドが含まれないため、DBから完全なデータを取得する
+    const { data: fullEv, error } = await supabase
+      .from('events')
+      .select('id, title, venue_name, venue_address, event_at, doors_open_at, ticket_price, capacity, description, notes, hero_image_url, status, publish_at')
+      .eq('id', ev.id)
+      .single();
+
+    if (error || !fullEv) { showToast('イベント情報の取得に失敗しました'); return; }
+
+    document.getElementById('ef-title').value      = fullEv.title || '';
+    document.getElementById('ef-venue').value      = fullEv.venue_name || '';
+    document.getElementById('ef-event-at').value  = toLocalDatetimeStr(fullEv.event_at);
+    document.getElementById('ef-doors-at').value  = toLocalDatetimeStr(fullEv.doors_open_at);
+    document.getElementById('ef-price').value      = fullEv.ticket_price || 500;
+    document.getElementById('ef-capacity').value   = fullEv.capacity || 36;
+    document.getElementById('ef-address').value    = fullEv.venue_address || '';
+    document.getElementById('ef-desc').value       = fullEv.description || '';
+    document.getElementById('ef-notes').value      = fullEv.notes || '';
+    document.getElementById('ef-status').value     = fullEv.status || 'draft';
+    document.getElementById('ef-publish-at').value = toLocalDatetimeStr(fullEv.publish_at);
+
+    // ✅ ヒーロー画像の復元
+    const heroUrl = fullEv.hero_image_url || '';
+    document.getElementById('ef-hero').value = heroUrl;
+    if (heroUrl) {
+      document.getElementById('hero-preview-img').src = heroUrl;
+      document.getElementById('hero-preview-wrap').style.display = 'block';
+      document.getElementById('hero-upload-hint').style.display = 'none';
+      document.getElementById('btn-hero-clear').style.display = 'inline-flex';
+    } else {
+      document.getElementById('hero-preview-wrap').style.display = 'none';
+      document.getElementById('hero-upload-hint').style.display = 'block';
+      document.getElementById('btn-hero-clear').style.display = 'none';
+    }
+
     document.getElementById('btn-event-dup').style.display = 'inline-flex';
   } else {
     // 新規作成：下書きがあれば復元、なければデフォルト
@@ -524,19 +579,26 @@ document.getElementById('btn-event-save').addEventListener('click', async () => 
   const rows = parseInt(document.getElementById('ef-rows').value)||6;
   const cols = parseInt(document.getElementById('ef-cols').value)||6;
 
+  // ✅ datetime-local（ローカル時刻）→ ISO（UTC）変換
+  function localToISO(val) {
+    if (!val) return null;
+    const d = new Date(val);
+    return isNaN(d) ? null : d.toISOString();
+  }
+
   const payload = {
     title:         document.getElementById('ef-title').value.trim(),
     venue_name:    document.getElementById('ef-venue').value.trim(),
-    event_at:      document.getElementById('ef-event-at').value,
-    doors_open_at: document.getElementById('ef-doors-at').value || null,
+    event_at:      localToISO(document.getElementById('ef-event-at').value),
+    doors_open_at: localToISO(document.getElementById('ef-doors-at').value) || null,
     ticket_price:  parseInt(document.getElementById('ef-price').value)||500,
     capacity:      rows * cols,
     venue_address: document.getElementById('ef-address').value.trim() || null,
     description:   document.getElementById('ef-desc').value.trim() || null,
     notes:         document.getElementById('ef-notes').value.trim() || null,
-    hero_image_url:document.getElementById('ef-hero').value.trim() || null, // Supabase Storageにアップロード済みのURL
+    hero_image_url:document.getElementById('ef-hero').value.trim() || null,
     status:        document.getElementById('ef-status').value,
-    publish_at:    document.getElementById('ef-publish-at').value || null,
+    publish_at:    localToISO(document.getElementById('ef-publish-at').value) || null,
   };
 
   if (!payload.title || !payload.venue_name || !payload.event_at) {
@@ -609,8 +671,8 @@ async function init() {
 }
 init();
 
-// ── Hero Image Upload (Supabase Storage) ─────────────────────
-async function handleHeroUpload(file) {
+// ✅ HTML の onchange/onclick から呼べるようにグローバルに公開
+window.handleHeroUpload = async function(file) {
   if (!file) return;
   const area = document.getElementById('hero-upload-area');
   const hint = document.getElementById('hero-upload-hint');
@@ -664,14 +726,14 @@ async function handleHeroUpload(file) {
   }
 }
 
-function handleHeroDrop(event) {
+window.handleHeroDrop = function(event) {
   event.preventDefault();
   document.getElementById('hero-upload-area').style.borderColor = 'var(--glass-border)';
   const file = event.dataTransfer.files[0];
-  if (file && file.type.startsWith('image/')) handleHeroUpload(file);
+  if (file && file.type.startsWith('image/')) window.handleHeroUpload(file);
 }
 
-function clearHeroImage() {
+window.clearHeroImage = function() {
   document.getElementById('ef-hero').value = '';
   document.getElementById('hero-preview-img').src = '';
   document.getElementById('hero-preview-wrap').style.display = 'none';
