@@ -444,7 +444,7 @@ function renderSeats(seatData, meta) {
     document.head.appendChild(s);
     return s;
   })();
-  seatStyle.textContent = `.seat { width:${seatSize}px !important; height:${seatSize}px !important; font-size:${Math.max(8, seatSize * 0.35)}px !important; }
+  seatStyle.textContent = `.seat { width:${seatSize}px !important; height:${seatSize}px !important; font-size:${Math.max(7, seatSize * 0.26)}px !important; letter-spacing:-0.02em; }
 .seat-placeholder { width:${seatSize}px !important; height:${seatSize}px !important; visibility:hidden; }`;
 
   const aisles    = new Set((meta?.aisles    || []).map(a => `${a.row},${a.col}`));
@@ -476,7 +476,7 @@ function renderSeats(seatData, meta) {
         el.dataset.label = s.label;
         el.dataset.status = selectedIds.has(s.id) ? SeatStatus.SELECTED : s.status;
         el.title          = s.label;
-        el.textContent    = s.label.split('-')[1] || s.label;
+        el.textContent    = s.label;
         el.addEventListener('click', () => toggleSeat(s));
         grid.appendChild(el);
       } else if (entrances.has(key)) {
