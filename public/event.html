@@ -444,38 +444,63 @@ function renderSeats(seatData, meta) {
     document.head.appendChild(s);
     return s;
   })();
-  seatStyle.textContent = `.seat { width:${seatSize}px !important; height:${seatSize}px !important; font-size:${Math.max(8, seatSize * 0.35)}px !important; }`;
+  seatStyle.textContent = `.seat { width:${seatSize}px !important; height:${seatSize}px !important; font-size:${Math.max(8, seatSize * 0.35)}px !important; }
+.seat-placeholder { width:${seatSize}px !important; height:${seatSize}px !important; visibility:hidden; }`;
 
   const aisles    = new Set((meta?.aisles    || []).map(a => `${a.row},${a.col}`));
   const entrances = new Set((meta?.entrances || []).map(e => `${e.row},${e.col}`));
+  const walls     = new Set((meta?.walls     || []).map(w => `${w.row},${w.col}`));
+
+  // ✅ row_num/col_numから座席を高速検索できるようマップ化
+  const seatMap = new Map();
+  seatData.forEach(s => seatMap.set(`${s.row_num},${s.col_num}`, s));
+
+  // ✅ layout_metaのrows/colsを使い、グリッド全マスを順番に走査する
+  //    （通路・出入口・壁のマスには座席データが存在しないため、
+  //     見た目の位置を保つためのプレースホルダーを描画する）
+  const totalRows = meta?.rows || (seatData.length > 0 ? Math.max(...seatData.map(s => s.row_num)) : 6);
+  const totalCols = meta?.cols || (seatData.length > 0 ? Math.max(...seatData.map(s => s.col_num)) : 6);
 
   grid.innerHTML = '';
 
-  seatData.forEach(s => {
-    const el = document.createElement('div');
-    el.className = 'seat';
-    el.dataset.id    = s.id;
-    el.dataset.label = s.label;
+  for (let r = 1; r <= totalRows; r++) {
+    for (let c = 1; c <= totalCols; c++) {
+      const key = `${r},${c}`;
+      const s   = seatMap.get(key);
 
-    const key = `${s.row_num},${s.col_num}`;
-    if (aisles.has(key)) {
-      el.dataset.type   = 'aisle';
-      el.dataset.status = 'aisle';
-    } else if (entrances.has(key)) {
-      el.dataset.type   = 'entrance';
-      el.dataset.status = 'entrance';
-      el.textContent    = '出入口';
-    } else {
-      el.dataset.status = selectedIds.has(s.id) ? SeatStatus.SELECTED : s.status;
-      el.title          = s.label;
-      el.textContent    = s.label.split('-')[1] || s.label;
-      el.addEventListener('click', () => toggleSeat(s));
+      if (s) {
+        // 通常の座席
+        const el = document.createElement('div');
+        el.className = 'seat';
+        el.dataset.id    = s.id;
+        el.dataset.label = s.label;
+        el.dataset.status = selectedIds.has(s.id) ? SeatStatus.SELECTED : s.status;
+        el.title          = s.label;
+        el.textContent    = s.label.split('-')[1] || s.label;
+        el.addEventListener('click', () => toggleSeat(s));
+        grid.appendChild(el);
+      } else if (entrances.has(key)) {
+        const el = document.createElement('div');
+        el.className = 'seat';
+        el.dataset.type   = 'entrance';
+        el.dataset.status = 'entrance';
+        el.textContent    = '出入口';
+        grid.appendChild(el);
+      } else if (aisles.has(key) || walls.has(key)) {
+        // 通路・壁: 見た目の位置だけ確保する透明なプレースホルダー
+        const el = document.createElement('div');
+        el.className = 'seat-placeholder';
+        grid.appendChild(el);
+      } else {
+        // どのリストにも属さない空白マス（念のためのフォールバック）
+        const el = document.createElement('div');
+        el.className = 'seat-placeholder';
+        grid.appendChild(el);
+      }
     }
+  }
 
-    grid.appendChild(el);
-  });
-
-  console.log(`[JAZZIN] ${seatData.length} seats rendered`);
+  console.log(`[JAZZIN] ${seatData.length} seats rendered in ${totalRows}x${totalCols} grid`);
 }
 
 function patchSeat(updated) {
