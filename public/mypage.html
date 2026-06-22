@@ -18,43 +18,40 @@ body { min-height:100dvh; }
 .page-title {
   font-family:var(--font-display);
   font-size:2.2rem; letter-spacing:0.1em;
-  background:var(--grad-text); background-size:200% 200%;
-  -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text;
+  color:var(--text-main);
   margin-bottom:0.3rem;
 }
-.page-sub { font-family:var(--font-serif); font-style:italic; font-size:0.82rem; color:rgba(200,230,245,0.4); letter-spacing:0.15em; margin-bottom:2rem; }
+.page-sub { font-family:var(--font-serif); font-style:italic; font-size:0.82rem; color:var(--text-sub); letter-spacing:0.12em; margin-bottom:2rem; }
 .rsv-card {
-  background:rgba(0,25,45,0.55);
-  backdrop-filter:blur(20px);
+  background:var(--bg-card);
   border:1px solid var(--glass-border);
   border-radius:var(--radius-lg);
   overflow:hidden;
   margin-bottom:1rem;
-  transition:border-color 200ms;
+  transition:border-color 120ms;
 }
-.rsv-card:hover { border-color:rgba(0,212,255,0.25); }
+.rsv-card:hover { border-color:rgba(0,212,255,0.22); }
 .rsv-card-header {
   display:flex; justify-content:space-between; align-items:center;
   padding:0.9rem 1.2rem;
-  border-bottom:1px solid var(--glass-border);
-  background:rgba(0,10,20,0.4);
+  border-bottom:1px solid var(--border-quiet);
+  background:#000d18;
   cursor:pointer;
 }
 .rsv-code { font-family:var(--font-display); font-size:1.3rem; letter-spacing:0.1em; color:var(--accent-1); }
 .rsv-status-badge { font-size:0.7rem; }
 .rsv-body { padding:1rem 1.2rem; }
-.rsv-row { display:flex; justify-content:space-between; gap:0.5rem; font-size:0.85rem; padding:0.4rem 0; border-bottom:1px solid rgba(100,200,255,0.05); flex-wrap:wrap; }
+.rsv-row { display:flex; justify-content:space-between; gap:0.5rem; font-size:0.85rem; padding:0.4rem 0; border-bottom:1px solid var(--border-quiet); flex-wrap:wrap; }
 .rsv-row:last-child { border-bottom:none; }
 .rsv-row-label { color:var(--text-sub); }
-.rsv-row-value { color:var(--text-main); font-weight:500; }
-.qr-section { padding:1.2rem; border-top:1px solid var(--glass-border); display:flex; flex-direction:column; align-items:center; gap:0.6rem; background:rgba(0,10,20,0.3); }
+.rsv-row-value { color:var(--text-main); font-weight:400; }
+.qr-section { padding:1.2rem; border-top:1px solid var(--border-quiet); display:flex; flex-direction:column; align-items:center; gap:0.6rem; background:#000d18; }
 .empty-state { text-align:center; padding:4rem 0; color:var(--text-sub); }
-.empty-icon { font-size:2.5rem; margin-bottom:1rem; }
+.empty-icon { font-size:2.5rem; margin-bottom:1rem; opacity:0.5; }
 
 /* 検索フォーム */
 .search-form {
-  background:rgba(0,25,45,0.55);
-  backdrop-filter:blur(20px);
+  background:var(--bg-card);
   border:1px solid var(--glass-border);
   border-radius:var(--radius-lg);
   padding:1.25rem;

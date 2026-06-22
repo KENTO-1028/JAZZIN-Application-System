@@ -16,9 +16,9 @@ body { min-height:100dvh; }
 .hero-img { width:100%; max-height:360px; object-fit:cover; display:block; }
 .hero-placeholder {
   width:100%; height:220px;
-  background:linear-gradient(135deg,#000d16,#001828,#000d16);
+  background:#000d18;
   display:flex; align-items:center; justify-content:center;
-  border-bottom:1px solid var(--glass-border);
+  border-bottom:1px solid var(--border-quiet);
 }
 .event-meta-row { display:grid; grid-template-columns:repeat(auto-fill,minmax(120px,1fr)); gap:0.75rem 1.5rem; margin:1.2rem 0; }
 .event-meta-item { display:flex; flex-direction:column; gap:3px; }
@@ -26,31 +26,30 @@ body { min-height:100dvh; }
 .event-meta-value { font-size:0.9rem; color:var(--text-main); }
 .section { margin:2rem 0; }
 .section-title {
-  font-family:var(--font-display); font-size:0.85rem; letter-spacing:0.25em; color:var(--text-sub);
+  font-family:var(--font-display); font-size:0.82rem; letter-spacing:0.25em; color:var(--text-sub);
   margin-bottom:1rem; display:flex; align-items:center; gap:0.75rem;
 }
-.section-title::after { content:''; flex:1; height:1px; background:var(--glass-border); }
+.section-title::after { content:''; flex:1; height:1px; background:var(--border-quiet); }
 .performer-row { display:flex; gap:0.75rem; flex-wrap:wrap; }
 .performer-card {
-  background:rgba(0,25,45,0.5); backdrop-filter:blur(16px);
+  background:var(--bg-card);
   border:1px solid var(--glass-border); border-radius:var(--radius);
-  padding:0.75rem 1rem; flex:1; min-width:160px; transition:border-color 200ms;
+  padding:0.75rem 1rem; flex:1; min-width:160px; transition:border-color 120ms;
 }
 .performer-card:hover { border-color:rgba(0,212,255,0.25); }
 .performer-name { font-weight:500; font-size:0.9rem; color:var(--text-main); }
-.performer-role { font-size:0.72rem; color:var(--accent-1); margin-top:2px; letter-spacing:0.08em; }
-.timetable { display:flex; flex-direction:column; gap:0.6rem; }
-.timetable-row { display:flex; gap:1rem; align-items:baseline; padding:0.5rem 0; border-bottom:1px solid rgba(100,200,255,0.05); }
+.performer-role { font-size:0.72rem; color:var(--accent-1); margin-top:2px; letter-spacing:0.06em; }
+.timetable { display:flex; flex-direction:column; }
+.timetable-row { display:flex; gap:1rem; align-items:baseline; padding:0.55rem 0; border-bottom:1px solid var(--border-quiet); }
 .timetable-row:last-child { border-bottom:none; }
-.timetable-time { color:var(--accent-1); font-weight:600; font-size:0.85rem; min-width:56px; font-family:var(--font-display); }
+.timetable-time { color:var(--accent-1); font-weight:400; font-size:0.85rem; min-width:56px; font-family:var(--font-display); letter-spacing:0.06em; }
 .timetable-act  { font-size:0.875rem; color:var(--text-main); }
 .flow-step { display:flex; gap:1rem; align-items:center; margin-bottom:0.75rem; }
 .flow-num {
-  width:28px; height:28px; border-radius:50%;
-  background:linear-gradient(135deg,var(--accent-2),var(--accent-1));
-  color:#000a10; font-size:0.72rem; font-weight:700;
+  width:24px; height:24px; border-radius:50%;
+  background:var(--accent-1);
+  color:#000d16; font-size:0.68rem; font-weight:600;
   display:flex; align-items:center; justify-content:center; flex-shrink:0;
-  box-shadow:0 0 12px rgba(0,212,255,0.3);
 }
 
 /* ── Seat map wrapper ── */
@@ -69,17 +68,16 @@ body { min-height:100dvh; }
   align-items: center;
   justify-content: center;
   width: 100%;
-  background: linear-gradient(135deg, rgba(0,50,80,0.6), rgba(0,100,140,0.4));
-  border: 1px solid rgba(0,212,255,0.25);
-  border-radius: 6px;
+  background: #000f1c;
+  border: 1px solid rgba(0,212,255,0.18);
+  border-radius: 4px;
   font-family: var(--font-display);
   letter-spacing: 0.3em;
-  font-size: 0.8rem;
-  color: rgba(0,212,255,0.7);
-  box-shadow: 0 0 20px rgba(0,212,255,0.08) inset;
+  font-size: 0.75rem;
+  color: rgba(0,212,255,0.6);
   margin-bottom: 0.75rem;
   margin-top: 0.25rem;
-  min-height: 36px;
+  min-height: 32px;
 }
 .stage-bar.stage-bottom { margin-bottom: 0.25rem; margin-top: 0.75rem; }
 
@@ -93,16 +91,15 @@ body { min-height:100dvh; }
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(180deg, rgba(0,50,80,0.6), rgba(0,100,140,0.4));
-  border: 1px solid rgba(0,212,255,0.25);
-  border-radius: 6px;
+  background: #000f1c;
+  border: 1px solid rgba(0,212,255,0.18);
+  border-radius: 4px;
   font-family: var(--font-display);
   letter-spacing: 0.25em;
-  font-size: 0.72rem;
-  color: rgba(0,212,255,0.7);
-  box-shadow: 0 0 20px rgba(0,212,255,0.08) inset;
+  font-size: 0.7rem;
+  color: rgba(0,212,255,0.6);
   writing-mode: vertical-rl;
-  min-width: 36px;
+  min-width: 32px;
   padding: 0.75rem 0;
 }
 
@@ -114,15 +111,15 @@ body { min-height:100dvh; }
   color: transparent !important;
 }
 .seat[data-type="entrance"] {
-  background: rgba(127,255,212,0.08) !important;
-  border-color: rgba(127,255,212,0.3) !important;
+  background: rgba(127,255,212,0.06) !important;
+  border-color: rgba(127,255,212,0.22) !important;
   color: var(--c-green) !important;
   cursor: default !important;
   font-size: 0.5rem !important;
 }
 .seat[data-type="stage"] {
-  background: rgba(0,212,255,0.06) !important;
-  border-color: rgba(0,212,255,0.2) !important;
+  background: rgba(0,212,255,0.04) !important;
+  border-color: rgba(0,212,255,0.16) !important;
   color: var(--accent-1) !important;
   cursor: default !important;
   font-size: 0.5rem !important;
@@ -132,8 +129,8 @@ body { min-height:100dvh; }
 /* Booking panel */
 .booking-panel {
   position:fixed; bottom:0; left:0; right:0;
-  background:rgba(0,10,16,0.92); backdrop-filter:blur(20px);
-  border-top:1px solid var(--glass-border);
+  background:rgba(0,8,14,0.97);
+  border-top:1px solid var(--border-quiet);
   padding:0.9rem 0 calc(0.9rem + env(safe-area-inset-bottom,0px)); z-index:50;
 }
 .booking-inner {
@@ -143,19 +140,17 @@ body { min-height:100dvh; }
 .booking-seats { font-family:var(--font-display); font-size:1.2rem; letter-spacing:0.05em; color:var(--text-main); }
 .booking-price { font-size:0.82rem; color:var(--accent-1); }
 .lock-timer { font-size:0.72rem; color:var(--text-sub); display:flex; align-items:center; gap:4px; }
-.lock-timer span { color:var(--accent-1); font-weight:600; }
+.lock-timer span { color:var(--accent-1); font-weight:500; }
 
 /* Modal */
 .modal-overlay {
-  position:fixed; inset:0; background:rgba(0,5,12,0.85); z-index:200;
+  position:fixed; inset:0; background:rgba(0,5,12,0.88); z-index:200;
   display:flex; align-items:center; justify-content:center; padding:1rem;
-  backdrop-filter:blur(8px);
 }
 .modal {
-  background:rgba(0,20,38,0.95); backdrop-filter:blur(24px);
+  background:#000f1a;
   border:1px solid var(--glass-border); border-radius:var(--radius-lg);
   width:100%; max-width:460px; max-height:min(90dvh,600px); overflow-y:auto; padding:clamp(1rem,4vw,1.75rem);
-  box-shadow:0 20px 60px rgba(0,0,0,0.7);
 }
 .modal-title { font-family:var(--font-display); font-size:1.4rem; letter-spacing:0.08em; margin-bottom:1.3rem; }
 .form-stack { display:flex; flex-direction:column; gap:1rem; }
@@ -164,8 +159,7 @@ body { min-height:100dvh; }
 .no-seats-msg {
   text-align:center; padding:2rem;
   color:var(--text-sub); font-size:0.875rem;
-  background:rgba(0,212,255,0.03);
-  border:1px solid var(--glass-border);
+  border:1px solid var(--border-quiet);
   border-radius:var(--radius);
 }
 </style>

@@ -18,22 +18,20 @@ body { display:flex; align-items:center; justify-content:center; min-height:100d
   text-align:center;
   font-family: var(--font-display);
   font-size: 3rem; letter-spacing: 0.15em;
+  /* ロゴのみグラデを維持 */
   background: var(--grad-text); background-size:200% 200%;
   -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text;
-  filter: drop-shadow(0 0 30px rgba(0,212,255,0.3));
-  animation: shimmer 6s ease infinite;
   margin-bottom: 0.25rem;
 }
-@keyframes shimmer { 0%,100%{background-position:0% 50%} 50%{background-position:100% 50%} }
 .login-sub {
   text-align:center;
   font-family: var(--font-serif); font-style:italic;
-  font-size:0.85rem; color:rgba(200,230,245,0.4);
+  font-size:0.85rem; color:var(--text-sub);
   letter-spacing:0.2em; margin-bottom:2rem;
 }
 .login-line {
-  width:80px; height:1px; margin:0.6rem auto 1.8rem;
-  background: linear-gradient(90deg, transparent, var(--accent-1), transparent);
+  width:60px; height:1px; margin:0.6rem auto 1.8rem;
+  background: var(--grad-line);
 }
 .error-msg { font-size:0.78rem; color:var(--c-red); text-align:center; min-height:1.2em; }
 .form-stack { display:flex; flex-direction:column; gap:1rem; }
