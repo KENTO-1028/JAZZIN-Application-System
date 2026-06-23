@@ -6,73 +6,141 @@
 <title>JAZZIN — 管理ダッシュボード</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Cormorant+Garamond:ital,wght@1,300&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@300;400;500;600&family=Syne:wght@500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/ui/style.css">
 <script src="/config.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <style>
-.admin-layout { display: grid; grid-template-columns: 200px 1fr; min-height: 100dvh; }
+/* Admin layout: sidebar + main */
+.admin-layout {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  min-height: 100vh;
+  min-height: 100dvh;
+}
 .sidebar {
-  background: var(--c-bg2);
-  border-right: 1px solid var(--c-border);
+  background: var(--bg-card);
+  border-right: 1px solid var(--border);
   padding: 1rem 0;
-  position: sticky; top: 0; height: 100dvh;
+  position: sticky; top: 0;
+  height: 100vh; height: 100dvh;
   overflow-y: auto;
+  /* iOS momentum scroll */
+  -webkit-overflow-scrolling: touch;
 }
 .sidebar-logo {
   padding: 0.5rem 1.25rem 1rem;
-  font-size: 1rem; font-weight: 700;
-  letter-spacing: 0.12em; color: var(--c-accent);
+  font-family: var(--font-ui);
+  font-size: 0.95rem; font-weight: 700;
+  letter-spacing: 0.02em; color: var(--accent-1);
 }
 .sidebar-section {
   font-size: 0.65rem; font-weight: 600;
-  letter-spacing: 0.15em; color: var(--c-dim);
-  padding: 0.75rem 1.25rem 0.3rem;
+  letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--text-tertiary);
+  padding: 0.875rem 1.25rem 0.35rem;
 }
 .sidebar-link {
   display: flex; align-items: center; gap: 0.5rem;
-  padding: 0.55rem 1.25rem;
-  color: var(--c-muted); text-decoration: none;
+  padding: 0.6rem 1.25rem;
+  /* Touch target */
+  min-height: 44px;
+  color: var(--text-secondary); text-decoration: none;
   font-size: 0.875rem;
-  transition: var(--transition);
+  transition: color var(--transition), background var(--transition);
   border-left: 2px solid transparent;
+  -webkit-tap-highlight-color: transparent;
 }
-.sidebar-link:hover { color: var(--c-text); background: var(--c-surface); }
-.sidebar-link.active { color: var(--c-accent); border-left-color: var(--c-accent); background: rgba(232,201,122,0.06); }
-.main-area { padding: 2rem; overflow-y: auto; }
-.page-title { font-size: 1.4rem; font-weight: 600; margin-bottom: 1.5rem; }
+@media (hover: hover) and (pointer: fine) {
+  .sidebar-link:hover { color: var(--text-primary); background: var(--bg-raised); }
+}
+.sidebar-link.active { color: var(--accent-1); border-left-color: var(--accent-1); background: rgba(0,212,255,0.05); }
+.main-area {
+  padding: clamp(1.25rem, 3vw, 2rem);
+  overflow-y: auto;
+  /* prevent content going under Safari toolbar */
+  padding-bottom: calc(clamp(1.25rem, 3vw, 2rem) + env(safe-area-inset-bottom, 0px));
+}
+.page-title {
+  font-family: var(--font-ui);
+  font-size: clamp(1.15rem, 2.5vw, 1.4rem);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin-bottom: 1.25rem;
+  color: var(--text-primary);
+}
 /* Stats cards */
-.stats-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px,1fr)); gap: 0.75rem; margin-bottom: 2rem; }
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 0.75rem; margin-bottom: 1.5rem;
+}
 .stat-card {
-  background: var(--c-surface);
-  border: 1px solid var(--c-border);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 1rem;
 }
-.stat-card-label { font-size: 0.7rem; color: var(--c-muted); letter-spacing: 0.08em; margin-bottom: 0.3rem; }
-.stat-card-value { font-size: 1.6rem; font-weight: 700; }
+.stat-card-label { font-size: 0.7rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-tertiary); margin-bottom: 0.3rem; }
+.stat-card-value { font-family: var(--font-ui); font-size: 1.5rem; font-weight: 700; letter-spacing: -0.02em; color: var(--text-primary); }
 /* Table */
 .data-table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
 .data-table th {
-  text-align: left; padding: 0.6rem 0.75rem;
+  text-align: left; padding: 0.55rem 0.75rem;
   font-size: 0.7rem; font-weight: 600;
-  letter-spacing: 0.08em; color: var(--c-muted);
-  border-bottom: 1px solid var(--c-border);
+  letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--text-tertiary);
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
 }
 .data-table td {
   padding: 0.7rem 0.75rem;
-  border-bottom: 1px solid var(--c-border);
+  border-bottom: 1px solid var(--border);
   vertical-align: middle;
+  color: var(--text-primary);
 }
-.data-table tr:hover td { background: var(--c-surface); }
 .data-table tr:last-child td { border-bottom: none; }
+@media (hover: hover) and (pointer: fine) {
+  .data-table tr:hover td { background: var(--bg-raised); }
+}
 /* Event form */
 .form-two { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
 textarea.form-input { min-height: 80px; resize: vertical; }
-@media(max-width:640px) {
-  .admin-layout { grid-template-columns: 1fr; }
-  .sidebar { position: static; height: auto; }
+
+/* ── iPad portrait: collapse sidebar to bottom nav ── */
+@media (max-width: 767px) {
+  .admin-layout { grid-template-columns: 1fr; grid-template-rows: 1fr auto; }
+  .sidebar {
+    position: fixed; bottom: 0; left: 0; right: 0; top: auto;
+    height: auto;
+    display: flex; flex-direction: row; overflow-x: auto; overflow-y: hidden;
+    padding: 0;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    border-right: none; border-top: 1px solid var(--border);
+    z-index: 80;
+    background: rgba(4,8,15,0.97);
+  }
+  .sidebar-logo,
+  .sidebar-section { display: none; }
+  .sidebar-link {
+    flex-direction: column; gap: 3px;
+    padding: 0.5rem 1rem;
+    min-width: 64px; min-height: 52px;
+    font-size: 0.65rem; font-weight: 500;
+    border-left: none; border-top: 2px solid transparent;
+    text-align: center; flex-shrink: 0;
+    white-space: nowrap;
+  }
+  .sidebar-link.active { border-top-color: var(--accent-1); border-left: none; }
+  .main-area { padding: 1.25rem 1rem; padding-bottom: calc(68px + env(safe-area-inset-bottom, 0px)); }
   .form-two { grid-template-columns: 1fr; }
+  .stats-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* ── iPad landscape sidebar: slightly narrower ── */
+@media (min-width: 768px) and (max-width: 1023px) {
+  .admin-layout { grid-template-columns: 180px 1fr; }
+  .stats-grid { grid-template-columns: repeat(3, 1fr); }
 }
 </style>
 </head>
@@ -121,7 +189,7 @@ textarea.form-input { min-height: 80px; resize: vertical; }
         <div class="stat-card"><div class="stat-card-label">予約数</div><div class="stat-card-value" id="s-reservations">--</div></div>
         <div class="stat-card"><div class="stat-card-label">入場済</div><div class="stat-card-value" id="s-checkins" style="color:var(--c-green)">--</div></div>
         <div class="stat-card"><div class="stat-card-label">未入場</div><div class="stat-card-value" id="s-remaining">--</div></div>
-        <div class="stat-card"><div class="stat-card-label">回収額</div><div class="stat-card-value" id="s-cash" style="color:var(--c-accent)">--</div></div>
+        <div class="stat-card"><div class="stat-card-label">回収額</div><div class="stat-card-value" id="s-cash" style="color:var(--accent-1)">--</div></div>
       </div>
       <div style="display:flex;gap:0.75rem;margin-bottom:1rem">
         <button class="btn btn-ghost btn-sm" id="btn-csv">📥 CSV出力</button>
@@ -150,7 +218,7 @@ textarea.form-input { min-height: 80px; resize: vertical; }
       <div id="event-form-wrap" style="display:none;margin-top:2rem">
         <div class="card"><div class="card-body">
           <h3 id="event-form-title" style="margin-bottom:0.5rem">イベント作成</h3>
-          <p id="draft-indicator" style="font-size:0.72rem;color:var(--c-muted);margin-bottom:1rem;min-height:1em"></p>
+          <p id="draft-indicator" style="font-size:0.72rem;color:var(--text-secondary);margin-bottom:1rem;min-height:1em"></p>
           <div class="form-stack" style="display:flex;flex-direction:column;gap:0.9rem">
             <div class="form-two">
               <div class="form-group">
@@ -206,22 +274,22 @@ textarea.form-input { min-height: 80px; resize: vertical; }
             </div>
             <div class="form-group">
               <label class="form-label">ヒーロー画像</label>
-              <div id="hero-upload-area" style="border:1px dashed var(--glass-border);border-radius:var(--radius);padding:1.5rem;text-align:center;cursor:pointer;background:rgba(0,15,30,0.4);transition:border-color 200ms;position:relative" 
+              <div id="hero-upload-area" style="border:1px dashed var(--border);border-radius:var(--radius);padding:1.5rem;text-align:center;cursor:pointer;background:rgba(0,15,30,0.4);transition:border-color 200ms;position:relative" 
                    onclick="document.getElementById('ef-hero-file').click()"
                    ondragover="event.preventDefault();this.style.borderColor='var(--accent-1)'"
-                   ondragleave="this.style.borderColor='var(--glass-border)'"
+                   ondragleave="this.style.borderColor='var(--border)'"
                    ondrop="handleHeroDrop(event)">
                 <div id="hero-preview-wrap" style="display:none;margin-bottom:0.75rem">
                   <img id="hero-preview-img" src="" alt="preview" style="max-width:100%;max-height:180px;border-radius:6px;object-fit:cover">
                 </div>
                 <div id="hero-upload-hint">
                   <div style="font-size:1.5rem;margin-bottom:0.4rem">🖼</div>
-                  <div style="font-size:0.82rem;color:var(--text-sub)">クリックまたはドラッグ＆ドロップで画像をアップロード</div>
-                  <div style="font-size:0.72rem;color:var(--c-dim);margin-top:0.25rem">JPG・PNG・WEBP対応・圧縮なし</div>
+                  <div style="font-size:0.82rem;color:var(--text-secondary)">クリックまたはドラッグ＆ドロップで画像をアップロード</div>
+                  <div style="font-size:0.72rem;color:var(--text-tertiary);margin-top:0.25rem">JPG・PNG・WEBP対応・圧縮なし</div>
                 </div>
                 <div id="hero-uploading" style="display:none">
                   <div class="spinner" style="margin:0 auto 0.5rem"></div>
-                  <div style="font-size:0.8rem;color:var(--text-sub)">アップロード中...</div>
+                  <div style="font-size:0.8rem;color:var(--text-secondary)">アップロード中...</div>
                 </div>
                 <input type="file" id="ef-hero-file" accept="image/*" style="display:none" onchange="handleHeroUpload(this.files[0])">
               </div>
@@ -258,13 +326,13 @@ textarea.form-input { min-height: 80px; resize: vertical; }
     <!-- Reservations (cross-event) -->
     <div id="section-reservations" style="display:none">
       <p class="page-title">予約一覧</p>
-      <p style="color:var(--c-muted);font-size:0.875rem">ダッシュボードでイベントを選択してCSV出力できます</p>
+      <p style="color:var(--text-secondary);font-size:0.875rem">ダッシュボードでイベントを選択してCSV出力できます</p>
     </div>
 
     <!-- Seats -->
     <div id="section-seats" style="display:none">
       <p class="page-title">座席管理</p>
-      <p style="color:var(--c-muted);font-size:0.875rem">イベント作成時に自動生成されます</p>
+      <p style="color:var(--text-secondary);font-size:0.875rem">イベント作成時に自動生成されます</p>
     </div>
 
   </main>
@@ -355,7 +423,7 @@ async function loadDashboard(ev) {
     const seats = r.reservation_seats?.map(rs=>rs.seat?.label).join(' ') || '--';
     const isIn  = checkins.has(r.id);
     return `<tr>
-      <td style="font-weight:600;color:var(--c-accent)">${r.reservation_code}</td>
+      <td style="font-weight:600;color:var(--accent-1)">${r.reservation_code}</td>
       <td>${r.guest_name}</td>
       <td>${seats}</td>
       <td>${r.num_seats}</td>
@@ -386,10 +454,10 @@ function exportCSV(ev, reservations, checkins) {
 function renderEventsList() {
   const el = document.getElementById('events-list');
   el.innerHTML = allEvents.map(ev => `
-    <div style="display:flex;align-items:center;gap:1rem;padding:1rem;background:var(--c-surface);border:1px solid var(--c-border);border-radius:var(--radius);margin-bottom:0.6rem">
+    <div style="display:flex;align-items:center;gap:1rem;padding:1rem;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:0.6rem">
       <div style="flex:1">
         <div style="font-weight:600">${ev.title}</div>
-        <div style="font-size:0.8rem;color:var(--c-muted)">${formatDate(ev.event_at)} — ${formatPrice(ev.ticket_price)}</div>
+        <div style="font-size:0.8rem;color:var(--text-secondary)">${formatDate(ev.event_at)} — ${formatPrice(ev.ticket_price)}</div>
       </div>
       <span class="badge ${ev.status==='published'?'badge-ok':'badge-admin'}">${ev.status}</span>
       <a href="/admin/event-edit.html?id=${ev.id}" class="btn btn-ghost btn-sm">編集</a>
@@ -722,13 +790,13 @@ window.handleHeroUpload = async function(file) {
     console.error(err);
   } finally {
     uploading.style.display = 'none';
-    area.style.borderColor = 'var(--glass-border)';
+    area.style.borderColor = 'var(--border)';
   }
 }
 
 window.handleHeroDrop = function(event) {
   event.preventDefault();
-  document.getElementById('hero-upload-area').style.borderColor = 'var(--glass-border)';
+  document.getElementById('hero-upload-area').style.borderColor = 'var(--border)';
   const file = event.dataTransfer.files[0];
   if (file && file.type.startsWith('image/')) window.handleHeroUpload(file);
 }
@@ -740,7 +808,7 @@ window.clearHeroImage = function() {
   document.getElementById('hero-upload-hint').style.display = 'block';
   document.getElementById('btn-hero-clear').style.display = 'none';
   document.getElementById('ef-hero-file').value = '';
-  document.getElementById('hero-upload-area').style.borderColor = 'var(--glass-border)';
+  document.getElementById('hero-upload-area').style.borderColor = 'var(--border)';
 }
 
 </script>

@@ -2,12 +2,12 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
 <meta name="theme-color" content="#000a10">
 <title>JAZZIN — イベント編集</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Cormorant+Garamond:ital,wght@1,300&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@300;400;500;600&family=Syne:wght@500;600;700&display=swap" rel="stylesheet">
 <script src="/config.js"></script>
 <link rel="stylesheet" href="/ui/style.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
@@ -17,49 +17,49 @@ body { min-height:100dvh; }
 
 /* Page title */
 .page-title {
-  font-family:var(--font-display); font-size:2rem; letter-spacing:0.1em;
-  color:var(--text-main);
+  font-family:var(--font-ui); font-size:1.75rem; font-weight:700;
+  letter-spacing:-0.02em;
+  color:var(--text-primary);
   margin-bottom:0.25rem;
 }
-.page-sub { font-family:var(--font-serif); font-style:italic; font-size:0.82rem; color:var(--text-sub); letter-spacing:0.12em; margin-bottom:2rem; }
+.page-sub { font-size:0.82rem; color:var(--text-secondary); margin-bottom:2rem; }
 
 /* Draft banner */
 .draft-banner {
   display:flex; align-items:center; justify-content:space-between;
   gap:1rem; flex-wrap:wrap;
   background:transparent;
-  border:1px solid rgba(0,212,255,0.18);
+  border:1px solid var(--border);
   border-radius:var(--radius);
   padding:0.75rem 1rem;
   margin-bottom:1.5rem;
   font-size:0.82rem;
 }
-.draft-banner.warn {
-  border-color:rgba(255,200,0,0.22);
-}
+.draft-banner.warn { border-color:rgba(255,200,0,0.22); }
 .draft-label { display:flex; align-items:center; gap:0.5rem; }
-.draft-dot {
-  width:6px; height:6px; border-radius:50%; flex-shrink:0;
-  background:var(--accent-1);
-}
+.draft-dot { width:6px; height:6px; border-radius:50%; flex-shrink:0; background:var(--accent-1); }
 .draft-dot.warn { background:#ffc800; }
 
 /* Section card */
 .section-card {
   background:var(--bg-card);
-  border:1px solid var(--glass-border);
+  border:1px solid var(--border);
   border-radius:var(--radius-lg);
   overflow:hidden;
   margin-bottom:1.25rem;
 }
 .section-card-header {
-  background:#000d18;
-  border-bottom:1px solid var(--border-quiet);
-  padding:0.85rem 1.25rem;
+  background:var(--bg-raised);
+  border-bottom:1px solid var(--border);
+  padding:0.75rem 1.25rem;
   display:flex; align-items:center; gap:0.6rem;
 }
-.section-card-icon { font-size:1rem; }
-.section-card-title { font-family:var(--font-display); font-size:0.82rem; letter-spacing:0.2em; color:var(--text-sub); }
+.section-card-icon { font-size:0.9rem; opacity:0.7; }
+.section-card-title {
+  font-family:var(--font-body); font-size:0.75rem; font-weight:600;
+  letter-spacing:0.08em; text-transform:uppercase;
+  color:var(--text-tertiary);
+}
 .section-card-body { padding:1.25rem; display:flex; flex-direction:column; gap:1rem; }
 
 /* Form grid */
@@ -71,12 +71,12 @@ body { min-height:100dvh; }
 .status-btn {
   padding:0.4rem 1rem; border-radius:var(--radius);
   font-size:0.8rem; font-weight:400; cursor:pointer;
-  border:1px solid var(--glass-border);
+  border:1px solid var(--border);
   background:transparent;
-  color:var(--text-sub); transition:border-color 100ms, color 100ms;
+  color:var(--text-secondary); transition:border-color 100ms, color 100ms;
   font-family:var(--font-body);
 }
-.status-btn:hover { border-color:rgba(0,212,255,0.3); color:var(--text-main); }
+.status-btn:hover { border-color:rgba(0,212,255,0.3); color:var(--text-primary); }
 .status-btn.active[data-val="draft"]     { border-color:var(--accent-1); color:var(--accent-1); }
 .status-btn.active[data-val="published"] { border-color:var(--c-green); color:var(--c-green); }
 .status-btn.active[data-val="ended"]     { border-color:var(--c-red); color:var(--c-red); }
@@ -95,8 +95,8 @@ body { min-height:100dvh; }
 .btn-remove-row:hover { border-color:rgba(224,85,85,0.5); }
 .btn-add-row {
   display:flex; align-items:center; gap:0.4rem;
-  font-size:0.78rem; color:var(--text-sub); cursor:pointer;
-  background:none; border:1px dashed var(--border-quiet);
+  font-size:0.78rem; color:var(--text-secondary); cursor:pointer;
+  background:none; border:1px dashed var(--border);
   border-radius:var(--radius); padding:0.5rem 0.75rem;
   width:100%; justify-content:center; transition:border-color 100ms, color 100ms;
   font-family:var(--font-body);
@@ -106,19 +106,23 @@ body { min-height:100dvh; }
 /* Bottom actions bar */
 .actions-bar {
   position:fixed; bottom:0; left:0; right:0;
-  background:rgba(0,8,14,0.97);
-  border-top:1px solid var(--border-quiet);
-  padding:0.9rem 1.25rem; z-index:50;
+  background:rgba(4,8,15,0.97);
+  border-top:1px solid var(--border);
+  padding:0.875rem 1.5rem;
+  padding-left:max(1.5rem, env(safe-area-inset-left,0px));
+  padding-right:max(1.5rem, env(safe-area-inset-right,0px));
+  padding-bottom:calc(0.875rem + env(safe-area-inset-bottom,0px));
+  z-index:50;
 }
 .actions-bar-inner {
   max-width:720px; margin:0 auto;
   display:flex; align-items:center; gap:0.75rem; flex-wrap:wrap;
 }
 .autosave-label {
-  flex:1; font-size:0.75rem; color:var(--text-sub);
+  flex:1; font-size:0.75rem; color:var(--text-secondary);
   display:flex; align-items:center; gap:0.4rem;
 }
-.autosave-label .dot { width:5px; height:5px; border-radius:50%; background:var(--c-dim); }
+.autosave-label .dot { width:5px; height:5px; border-radius:50%; background:var(--text-tertiary); }
 .autosave-label .dot.saving { background:var(--accent-1); }
 .autosave-label .dot.saved  { background:var(--c-green); }
 
@@ -143,7 +147,7 @@ body { min-height:100dvh; }
   <div class="header-inner">
     <a href="/admin/index.html" class="logo"><img src="/assets/jazzin_logo.png" alt="JAZZIN" height="26"></a>
     <div style="display:flex;gap:0.5rem;align-items:center">
-      <span id="header-status" style="font-size:0.75rem;color:var(--text-sub)"></span>
+      <span id="header-status" style="font-size:0.75rem;color:var(--text-secondary)"></span>
       <a href="/admin/index.html" class="btn btn-ghost btn-sm">← 管理画面</a>
     </div>
   </div>
@@ -159,7 +163,7 @@ body { min-height:100dvh; }
 <div id="app" style="display:none">
   <div id="loading-screen" style="text-align:center;padding:5rem 1rem">
     <div class="spinner" style="margin:0 auto 1rem"></div>
-    <p style="font-size:0.875rem;color:var(--text-sub)">読み込み中...</p>
+    <p style="font-size:0.875rem;color:var(--text-secondary)">読み込み中...</p>
   </div>
 
   <div id="edit-screen" style="display:none">
@@ -306,12 +310,12 @@ body { min-height:100dvh; }
               <button class="status-btn" data-val="ended">終了</button>
             </div>
             <input type="hidden" id="f-status" value="draft">
-            <p style="font-size:0.72rem;color:var(--text-sub);margin-top:0.4rem">「下書き」の状態では一般ユーザーに表示されません</p>
+            <p style="font-size:0.72rem;color:var(--text-secondary);margin-top:0.4rem">「下書き」の状態では一般ユーザーに表示されません</p>
           </div>
           <div class="form-group">
             <label class="form-label">公開開始日時（任意）</label>
             <input type="datetime-local" class="form-input" id="f-publish-at">
-            <p style="font-size:0.72rem;color:var(--text-sub);margin-top:0.25rem">設定するとこの日時以降に自動的に一覧へ表示されます</p>
+            <p style="font-size:0.72rem;color:var(--text-secondary);margin-top:0.25rem">設定するとこの日時以降に自動的に一覧へ表示されます</p>
           </div>
         </div>
       </div>

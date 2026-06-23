@@ -2,82 +2,134 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
 <meta name="theme-color" content="#000a10">
 <title>JAZZIN — 予約完了</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Cormorant+Garamond:ital,wght@1,300&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@300;400;500;600&family=Syne:wght@500;600;700&display=swap" rel="stylesheet">
 <script src="/config.js"></script>
 <link rel="stylesheet" href="/ui/style.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-<!-- ✅ EmailJS削除済み -->
 <style>
 body { min-height:100dvh; }
-.confirm-page { max-width:520px; margin:0 auto; padding:clamp(1.25rem,4vw,2rem) var(--page-px,1.25rem) 6rem; position:relative; z-index:1; }
+
+.confirm-page {
+  max-width: 480px;
+  margin: 0 auto;
+  padding: clamp(1.5rem,4vw,2.5rem) var(--page-px) 6rem;
+  position: relative; z-index: 1;
+}
+
+/* ── ヘッダー：チェックマーク + タイトル ── */
 .confirm-header { text-align:center; margin-bottom:2rem; }
 .check-icon {
-  width:52px; height:52px;
-  border:1px solid rgba(127,255,212,0.25);
-  border-radius:50%;
-  display:flex; align-items:center; justify-content:center;
-  margin:0 auto 1rem;
-  font-size:1.3rem;
-  color:var(--c-green);
+  width: 44px; height: 44px;
+  background: rgba(127,255,212,0.1);
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  margin: 0 auto 1rem;
+  font-size: 1.1rem; color: var(--c-green);
 }
 .confirm-title {
-  font-family:var(--font-display);
-  font-size:2rem; letter-spacing:0.08em;
-  color:var(--text-main);
-  margin-bottom:0.3rem;
+  font-family: var(--font-ui);
+  font-size: 1.6rem; font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+  margin-bottom: 0.25rem;
 }
-.confirm-subtitle { font-family:var(--font-serif); font-style:italic; font-size:0.85rem; color:var(--text-sub); letter-spacing:0.15em; }
+.confirm-subtitle {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  letter-spacing: 0;
+}
 
+/* ── チケットカード ── */
 .confirm-card {
-  background:var(--bg-card);
-  border:1px solid var(--glass-border);
-  border-radius:var(--radius-lg);
-  overflow:hidden;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
 }
-.confirm-card-header {
-  background:#000d18;
-  border-bottom:1px solid var(--border-quiet);
-  padding:1.1rem 1.4rem;
-  display:flex; align-items:center; justify-content:space-between;
+
+/* ── 座席番号ヒーローゾーン ── */
+.seat-hero {
+  padding: 2rem 1.5rem 1.5rem;
+  text-align: center;
+  border-bottom: 1px solid var(--border);
 }
-.confirm-code {
-  font-family:var(--font-display);
-  font-size:1.8rem; letter-spacing:0.12em;
-  color:var(--accent-1);
+.seat-hero-label {
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  margin-bottom: 0.5rem;
 }
-.confirm-body { padding:1.25rem 1.4rem; }
+.seat-hero-value {
+  font-family: var(--font-ui);
+  font-size: clamp(2.8rem, 9vw, 4.5rem);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1;
+  color: var(--accent-1);
+  margin-bottom: 0.4rem;
+  word-break: break-all;
+}
+.seat-hero-count {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  font-weight: 400;
+}
+
+/* ── 詳細行 ── */
+.confirm-body { padding: 0 1.25rem; }
 .confirm-row {
-  display:flex; justify-content:space-between; align-items:flex-start;
-  padding:0.55rem 0; border-bottom:1px solid var(--border-quiet);
-  font-size:0.875rem; gap:0.75rem; flex-wrap:wrap;
+  display: flex; justify-content: space-between; align-items: baseline;
+  padding: 0.65rem 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.875rem;
+  gap: 1rem;
 }
-.confirm-row:last-child { border-bottom:none; }
-.confirm-row-label { color:var(--text-sub); flex-shrink:0; }
-.confirm-row-value { color:var(--text-main); font-weight:400; text-align:right; }
+.confirm-row:last-child { border-bottom: none; }
+.confirm-row-label { color: var(--text-secondary); flex-shrink: 0; font-size: 0.82rem; }
+.confirm-row-value { color: var(--text-primary); font-weight: 500; text-align: right; }
+
+/* 予約番号行は小さく控えめに */
+.confirm-row.rsv-row .confirm-row-value {
+  font-family: var(--font-body);
+  font-size: 0.82rem;
+  font-weight: 400;
+  color: var(--text-secondary);
+}
+
+/* ── QR ── */
 .qr-section {
-  display:flex; flex-direction:column; align-items:center;
-  gap:0.75rem; padding:1.5rem;
-  border-top:1px solid var(--border-quiet);
-  background:#000d18;
+  display: flex; flex-direction: column; align-items: center;
+  gap: 0.75rem; padding: 1.5rem;
+  border-top: 1px solid var(--border);
+  background: var(--bg-raised);
 }
-.qr-note { font-size:0.72rem; color:var(--text-sub); text-align:center; letter-spacing:0.05em; }
-.actions { display:flex; flex-direction:column; gap:0.75rem; margin-top:1.5rem; padding-bottom:env(safe-area-inset-bottom,0px); }
+.qr-note { font-size: 0.72rem; color: var(--text-secondary); text-align: center; }
+
+/* ── Actions ── */
+.actions {
+  display: flex; flex-direction: column;
+  gap: 0.6rem; margin-top: 1.25rem;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* ── Notice ── */
 .notice {
-  background:rgba(0,212,255,0.03);
-  border:1px solid var(--border-quiet);
-  border-radius:var(--radius);
-  padding:1rem 1.1rem;
-  font-size:0.82rem; color:var(--text-sub); line-height:1.8;
-  margin-top:1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem 1.1rem;
+  font-size: 0.82rem; color: var(--text-secondary); line-height: 1.75;
+  margin-top: 1rem;
 }
-.notice strong { color:var(--text-main); font-weight:500; }
+.notice strong { color: var(--text-primary); font-weight: 500; }
 </style>
 </head>
 <body>
@@ -110,17 +162,17 @@ body { min-height:100dvh; }
     </div>
 
     <div id="capture-target" class="confirm-card">
-      <div class="confirm-card-header">
-        <div>
-          <div style="font-size:0.62rem;letter-spacing:0.18em;color:var(--text-sub);margin-bottom:3px">RESERVATION NO.</div>
-          <div class="confirm-code" id="rsv-code">--</div>
-        </div>
-        <div style="text-align:right">
-          <div style="font-size:0.62rem;letter-spacing:0.12em;color:var(--text-sub);margin-bottom:3px">PAYMENT</div>
-          <div style="font-size:0.8rem;color:var(--text-sub)">当日現金払い</div>
-        </div>
+      <!-- ① 座席番号ヒーロー（最大表示） -->
+      <div class="seat-hero">
+        <div class="seat-hero-label">Your Seat</div>
+        <div class="seat-hero-value" id="hero-seats">--</div>
+        <div class="seat-hero-count" id="hero-count"></div>
       </div>
+
+      <!-- ② 詳細情報 -->
       <div class="confirm-body" id="rsv-details"></div>
+
+      <!-- ③ QR -->
       <div class="qr-section">
         <div class="qr-box" id="qr-container"></div>
         <p class="qr-note">受付でこのQRコードをご提示ください</p>
@@ -215,22 +267,22 @@ async function loadReservation() {
     if (error || !rsv) throw new Error('not found');
 
     const ev    = rsv.event;
-    const seats = rsv.reservation_seats.map(rs => rs.seat?.label).filter(Boolean).join('、');
+    const seats = rsv.reservation_seats.map(rs => rs.seat?.label).filter(Boolean).join('  ');
     const price = ev?.ticket_price || 500;
 
-    document.getElementById('rsv-code').textContent = rsv.reservation_code;
+    // ── 座席ヒーロー（最大表示） ──
+    document.getElementById('hero-seats').textContent = seats || '--';
+    document.getElementById('hero-count').textContent =
+      `${rsv.num_seats}名 · 当日現金 ${formatPrice(price * rsv.num_seats)}`;
+
+    // ── 詳細テーブル（予約番号は控えめに） ──
     document.getElementById('rsv-details').innerHTML = `
       ${ev ? `
       <div class="confirm-row"><span class="confirm-row-label">イベント</span><span class="confirm-row-value">${ev.title}</span></div>
       <div class="confirm-row"><span class="confirm-row-label">日時</span><span class="confirm-row-value">${formatDate(ev.event_at)}</span></div>
       <div class="confirm-row"><span class="confirm-row-label">会場</span><span class="confirm-row-value">${ev.venue_name}</span></div>` : ''}
       <div class="confirm-row"><span class="confirm-row-label">お名前</span><span class="confirm-row-value">${rsv.guest_name}</span></div>
-      <div class="confirm-row"><span class="confirm-row-label">座席</span><span class="confirm-row-value">${seats}</span></div>
-      <div class="confirm-row"><span class="confirm-row-label">人数</span><span class="confirm-row-value">${rsv.num_seats} 名</span></div>
-      <div class="confirm-row">
-        <span class="confirm-row-label">料金（当日現金）</span>
-        <span class="confirm-row-value" style="color:var(--accent-1);font-weight:600">${formatPrice(price * rsv.num_seats)}</span>
-      </div>`;
+      <div class="confirm-row rsv-row"><span class="confirm-row-label">予約番号</span><span class="confirm-row-value" id="rsv-code">${rsv.reservation_code}</span></div>`;
 
     if (ev?.venue_address) {
       const mapBtn = document.getElementById('btn-map');
@@ -276,7 +328,10 @@ async function loadReservation() {
 
   } catch {
     // フォールバック: URLパラメータのみ
-    document.getElementById('rsv-code').textContent = RSV_CODE || '--';
+    document.getElementById('hero-seats').textContent = '--';
+    document.getElementById('hero-count').textContent = '';
+    const rsvEl = document.getElementById('rsv-code');
+    if (rsvEl) rsvEl.textContent = RSV_CODE || '--';
     renderQR(QR_TOKEN);
   }
 

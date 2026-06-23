@@ -2,12 +2,12 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
 <meta name="theme-color" content="#000a10">
 <title>JAZZIN — イベント詳細</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Cormorant+Garamond:ital,wght@1,300&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@300;400;500;600&family=Syne:wght@500;600;700&display=swap" rel="stylesheet">
 <script src="/config.js"></script>
 <link rel="stylesheet" href="/ui/style.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
@@ -18,32 +18,32 @@ body { min-height:100dvh; }
   width:100%; height:220px;
   background:#000d18;
   display:flex; align-items:center; justify-content:center;
-  border-bottom:1px solid var(--border-quiet);
+  border-bottom:1px solid var(--border);
 }
 .event-meta-row { display:grid; grid-template-columns:repeat(auto-fill,minmax(120px,1fr)); gap:0.75rem 1.5rem; margin:1.2rem 0; }
 .event-meta-item { display:flex; flex-direction:column; gap:3px; }
-.event-meta-label { font-size:0.65rem; letter-spacing:0.15em; color:var(--text-sub); font-family:var(--font-display); }
-.event-meta-value { font-size:0.9rem; color:var(--text-main); }
+.event-meta-label { font-size:0.65rem; letter-spacing:0.15em; color:var(--text-secondary); font-family:var(--font-body); font-weight:600; }
+.event-meta-value { font-size:0.9rem; color:var(--text-primary); }
 .section { margin:2rem 0; }
 .section-title {
-  font-family:var(--font-display); font-size:0.82rem; letter-spacing:0.25em; color:var(--text-sub);
+  font-family:var(--font-body); font-size:0.7rem; font-weight:600; letter-spacing:0.1em; text-transform:uppercase; color:var(--text-tertiary);
   margin-bottom:1rem; display:flex; align-items:center; gap:0.75rem;
 }
-.section-title::after { content:''; flex:1; height:1px; background:var(--border-quiet); }
+.section-title::after { content:''; flex:1; height:1px; background:var(--border); }
 .performer-row { display:flex; gap:0.75rem; flex-wrap:wrap; }
 .performer-card {
   background:var(--bg-card);
-  border:1px solid var(--glass-border); border-radius:var(--radius);
+  border:1px solid var(--border); border-radius:var(--radius);
   padding:0.75rem 1rem; flex:1; min-width:160px; transition:border-color 120ms;
 }
 .performer-card:hover { border-color:rgba(0,212,255,0.25); }
-.performer-name { font-weight:500; font-size:0.9rem; color:var(--text-main); }
+.performer-name { font-weight:500; font-size:0.9rem; color:var(--text-primary); }
 .performer-role { font-size:0.72rem; color:var(--accent-1); margin-top:2px; letter-spacing:0.06em; }
 .timetable { display:flex; flex-direction:column; }
-.timetable-row { display:flex; gap:1rem; align-items:baseline; padding:0.55rem 0; border-bottom:1px solid var(--border-quiet); }
+.timetable-row { display:flex; gap:1rem; align-items:baseline; padding:0.55rem 0; border-bottom:1px solid var(--border); }
 .timetable-row:last-child { border-bottom:none; }
-.timetable-time { color:var(--accent-1); font-weight:400; font-size:0.85rem; min-width:56px; font-family:var(--font-display); letter-spacing:0.06em; }
-.timetable-act  { font-size:0.875rem; color:var(--text-main); }
+.timetable-time { color:var(--accent-1); font-weight:400; font-size:0.85rem; min-width:56px; font-family:var(--font-body); font-weight:500; letter-spacing:0; }
+.timetable-act  { font-size:0.875rem; color:var(--text-primary); }
 .flow-step { display:flex; gap:1rem; align-items:center; margin-bottom:0.75rem; }
 .flow-num {
   width:24px; height:24px; border-radius:50%;
@@ -68,16 +68,18 @@ body { min-height:100dvh; }
   align-items: center;
   justify-content: center;
   width: 100%;
-  background: #000f1c;
-  border: 1px solid rgba(0,212,255,0.18);
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
   border-radius: 4px;
-  font-family: var(--font-display);
-  letter-spacing: 0.3em;
-  font-size: 0.75rem;
-  color: rgba(0,212,255,0.6);
+  font-family: var(--font-body);
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
   margin-bottom: 0.75rem;
   margin-top: 0.25rem;
-  min-height: 32px;
+  min-height: 30px;
 }
 .stage-bar.stage-bottom { margin-bottom: 0.25rem; margin-top: 0.75rem; }
 
@@ -91,15 +93,17 @@ body { min-height:100dvh; }
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #000f1c;
-  border: 1px solid rgba(0,212,255,0.18);
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
   border-radius: 4px;
-  font-family: var(--font-display);
-  letter-spacing: 0.25em;
-  font-size: 0.7rem;
-  color: rgba(0,212,255,0.6);
+  font-family: var(--font-body);
+  font-size: 0.6rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
   writing-mode: vertical-rl;
-  min-width: 32px;
+  min-width: 30px;
   padding: 0.75rem 0;
 }
 
@@ -129,37 +133,60 @@ body { min-height:100dvh; }
 /* Booking panel */
 .booking-panel {
   position:fixed; bottom:0; left:0; right:0;
-  background:rgba(0,8,14,0.97);
-  border-top:1px solid var(--border-quiet);
-  padding:0.9rem 0 calc(0.9rem + env(safe-area-inset-bottom,0px)); z-index:50;
+  background:rgba(4,8,15,0.97);
+  border-top:1px solid var(--border);
+  padding:0.875rem 0;
+  padding-bottom:calc(0.875rem + env(safe-area-inset-bottom,0px));
+  z-index:50;
 }
 .booking-inner {
-  max-width:var(--container-w,920px); margin:0 auto; padding:0 var(--page-px,1.25rem);
+  max-width:var(--container-w,960px); margin:0 auto;
+  padding:0 var(--page-px,1.5rem);
+  padding-left:max(var(--page-px,1.5rem), env(safe-area-inset-left,0px));
+  padding-right:max(var(--page-px,1.5rem), env(safe-area-inset-right,0px));
   display:flex; align-items:center; gap:0.75rem; flex-wrap:wrap;
 }
-.booking-seats { font-family:var(--font-display); font-size:1.2rem; letter-spacing:0.05em; color:var(--text-main); }
+.booking-seats { font-family:var(--font-ui); font-size:1.05rem; font-weight:600; letter-spacing:-0.01em; color:var(--text-primary); }
 .booking-price { font-size:0.82rem; color:var(--accent-1); }
-.lock-timer { font-size:0.72rem; color:var(--text-sub); display:flex; align-items:center; gap:4px; }
+.lock-timer { font-size:0.72rem; color:var(--text-secondary); display:flex; align-items:center; gap:4px; }
 .lock-timer span { color:var(--accent-1); font-weight:500; }
 
 /* Modal */
 .modal-overlay {
   position:fixed; inset:0; background:rgba(0,5,12,0.88); z-index:200;
-  display:flex; align-items:center; justify-content:center; padding:1rem;
+  display:flex; align-items:flex-end; justify-content:center;
+  padding: env(safe-area-inset-top,0px) 0 0;
+}
+/* iPad/desktop: center the modal */
+@media (min-width: 600px) {
+  .modal-overlay { align-items:center; padding:1rem; }
 }
 .modal {
-  background:#000f1a;
-  border:1px solid var(--glass-border); border-radius:var(--radius-lg);
-  width:100%; max-width:460px; max-height:min(90dvh,600px); overflow-y:auto; padding:clamp(1rem,4vw,1.75rem);
+  background:var(--bg-card);
+  border:1px solid var(--border); border-radius:var(--radius-lg) var(--radius-lg) 0 0;
+  width:100%; max-width:100%;
+  max-height:92dvh; max-height:92vh;
+  overflow-y:auto;
+  -webkit-overflow-scrolling:touch;
+  padding:clamp(1rem,4vw,1.5rem);
+  padding-bottom:calc(clamp(1rem,4vw,1.5rem) + env(safe-area-inset-bottom,0px));
 }
-.modal-title { font-family:var(--font-display); font-size:1.4rem; letter-spacing:0.08em; margin-bottom:1.3rem; }
-.form-stack { display:flex; flex-direction:column; gap:1rem; }
+@media (min-width: 600px) {
+  .modal {
+    border-radius:var(--radius-lg);
+    max-width:480px;
+    max-height:min(90dvh,90vh,620px);
+    padding-bottom:clamp(1rem,4vw,1.5rem);
+  }
+}
+.modal-title { font-family:var(--font-ui); font-size:1.2rem; font-weight:700; letter-spacing:-0.02em; margin-bottom:1.25rem; color:var(--text-primary); }
+.form-stack { display:flex; flex-direction:column; gap:0.875rem; }
 
 /* No seats message */
 .no-seats-msg {
   text-align:center; padding:2rem;
-  color:var(--text-sub); font-size:0.875rem;
-  border:1px solid var(--border-quiet);
+  color:var(--text-secondary); font-size:0.875rem;
+  border:1px solid var(--border);
   border-radius:var(--radius);
 }
 </style>
@@ -221,7 +248,7 @@ body { min-height:100dvh; }
         <label class="form-label">備考（任意）</label>
         <input type="text" class="form-input" id="f-notes" placeholder="アレルギーなど">
       </div>
-      <div id="modal-summary" style="background:rgba(0,10,20,0.5);border:1px solid var(--glass-border);border-radius:var(--radius);padding:0.9rem;font-size:0.82rem;color:var(--text-sub)"></div>
+      <div id="modal-summary" style="background:var(--bg-raised);border:1px solid var(--border);border-radius:var(--radius);padding:0.9rem;font-size:0.875rem;color:var(--text-secondary);margin-bottom:1rem"></div>
       <div style="display:flex;gap:0.75rem;margin-top:0.3rem">
         <button class="btn btn-ghost btn-full" id="btn-modal-cancel">キャンセル</button>
         <button class="btn btn-primary btn-full" id="btn-confirm" disabled>
@@ -338,7 +365,7 @@ function renderPage(ev, seatData, meta) {
       ${ev.description ? `
       <section class="section">
         <p class="section-title">ABOUT</p>
-        <p style="color:var(--text-sub);line-height:1.9;white-space:pre-line">${ev.description}</p>
+        <p style="color:var(--text-secondary);line-height:1.9;white-space:pre-line">${ev.description}</p>
       </section>` : ''}
 
       ${performers ? `
@@ -356,7 +383,7 @@ function renderPage(ev, seatData, meta) {
       <section class="section">
         <p class="section-title">
           座席を選ぶ
-          <span style="color:var(--text-sub);font-size:0.75rem;letter-spacing:0.05em;font-family:var(--font-body)">
+          <span style="color:var(--text-secondary);font-size:0.75rem;letter-spacing:0.05em;font-family:var(--font-body)">
             ${avail} 席空き
           </span>
         </p>
@@ -386,22 +413,22 @@ function renderPage(ev, seatData, meta) {
       ${ev.venue_address ? `
       <section class="section">
         <p class="section-title">ACCESS</p>
-        <p style="color:var(--text-sub);margin-bottom:0.75rem">${ev.venue_address}</p>
+        <p style="color:var(--text-secondary);margin-bottom:0.75rem">${ev.venue_address}</p>
         <a href="https://maps.google.com/?q=${encodeURIComponent(ev.venue_address)}"
            target="_blank" rel="noopener" class="btn btn-ghost btn-sm">Google Map で開く →</a>
       </section>` : ''}
 
       <section class="section">
         <p class="section-title">当日の流れ</p>
-        <div class="flow-step"><div class="flow-num">1</div><span style="color:var(--text-sub)">QRコードを受付スタッフに提示</span></div>
-        <div class="flow-step"><div class="flow-num">2</div><span style="color:var(--text-sub)">現金でチケット料金をお支払い（${formatPrice(ev.ticket_price)} / 人）</span></div>
-        <div class="flow-step"><div class="flow-num">3</div><span style="color:var(--text-sub)">入場・お席へどうぞ</span></div>
+        <div class="flow-step"><div class="flow-num">1</div><span style="color:var(--text-secondary)">QRコードを受付スタッフに提示</span></div>
+        <div class="flow-step"><div class="flow-num">2</div><span style="color:var(--text-secondary)">現金でチケット料金をお支払い（${formatPrice(ev.ticket_price)} / 人）</span></div>
+        <div class="flow-step"><div class="flow-num">3</div><span style="color:var(--text-secondary)">入場・お席へどうぞ</span></div>
       </section>
 
       ${ev.notes ? `
       <section class="section">
         <p class="section-title">NOTES</p>
-        <p style="color:var(--text-sub);white-space:pre-line;font-size:0.875rem">${ev.notes}</p>
+        <p style="color:var(--text-secondary);white-space:pre-line;font-size:0.875rem">${ev.notes}</p>
       </section>` : ''}
     </div>`;
 
@@ -581,7 +608,7 @@ function openFormModal() {
   const labels = [...selectedIds].map(id => seats.find(s => s.id === id)?.label).join('、');
   document.getElementById('modal-summary').innerHTML = `
     <div style="display:flex;flex-direction:column;gap:4px">
-      <div style="color:var(--text-main);font-weight:500">${event.title}</div>
+      <div style="color:var(--text-primary);font-weight:500">${event.title}</div>
       <div>席: ${labels}</div>
       <div>合計: ${formatPrice(TICKET_PRICE() * n)}（${n}名 × ${formatPrice(TICKET_PRICE())}）</div>
       <div style="margin-top:4px;font-size:0.72rem;color:var(--accent-1)">※当日現金払い</div>

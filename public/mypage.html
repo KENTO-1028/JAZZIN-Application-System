@@ -2,63 +2,66 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
 <meta name="theme-color" content="#000a10">
 <title>JAZZIN — 予約マイページ</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Cormorant+Garamond:ital,wght@1,300&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@300;400;500;600&family=Syne:wght@500;600;700&display=swap" rel="stylesheet">
 <script src="/config.js"></script>
 <link rel="stylesheet" href="/ui/style.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <style>
 body { min-height:100dvh; }
-.mypage { max-width:600px; margin:0 auto; padding:clamp(1.25rem,4vw,2rem) var(--page-px,1.25rem) 5rem; position:relative; z-index:1; }
+.mypage { max-width:600px; margin:0 auto; padding:clamp(1.5rem,4vw,2.5rem) var(--page-px) 5rem; position:relative; z-index:1; }
 .page-title {
-  font-family:var(--font-display);
-  font-size:2.2rem; letter-spacing:0.1em;
-  color:var(--text-main);
-  margin-bottom:0.3rem;
+  font-family:var(--font-ui);
+  font-size:1.75rem; font-weight:700; letter-spacing:-0.02em;
+  color:var(--text-primary);
+  margin-bottom:0.25rem;
 }
-.page-sub { font-family:var(--font-serif); font-style:italic; font-size:0.82rem; color:var(--text-sub); letter-spacing:0.12em; margin-bottom:2rem; }
+.page-sub { font-size:0.82rem; color:var(--text-secondary); margin-bottom:2rem; }
 .rsv-card {
   background:var(--bg-card);
-  border:1px solid var(--glass-border);
+  border:1px solid var(--border);
   border-radius:var(--radius-lg);
   overflow:hidden;
-  margin-bottom:1rem;
-  transition:border-color 120ms;
+  margin-bottom:0.75rem;
+  transition:border-color 120ms, background 120ms;
 }
-.rsv-card:hover { border-color:rgba(0,212,255,0.22); }
+.rsv-card:hover { background:var(--bg-raised); border-color:var(--border-strong); }
 .rsv-card-header {
   display:flex; justify-content:space-between; align-items:center;
-  padding:0.9rem 1.2rem;
-  border-bottom:1px solid var(--border-quiet);
-  background:#000d18;
+  padding:0.875rem 1.1rem;
+  border-bottom:1px solid var(--border);
+  background:var(--bg-raised);
   cursor:pointer;
 }
-.rsv-code { font-family:var(--font-display); font-size:1.3rem; letter-spacing:0.1em; color:var(--accent-1); }
+.rsv-code { font-family:var(--font-ui); font-size:1rem; font-weight:600; letter-spacing:-0.01em; color:var(--accent-1); }
 .rsv-status-badge { font-size:0.7rem; }
-.rsv-body { padding:1rem 1.2rem; }
-.rsv-row { display:flex; justify-content:space-between; gap:0.5rem; font-size:0.85rem; padding:0.4rem 0; border-bottom:1px solid var(--border-quiet); flex-wrap:wrap; }
+.rsv-body { padding:0.875rem 1.1rem; }
+.rsv-row { display:flex; justify-content:space-between; gap:0.5rem; font-size:0.85rem; padding:0.45rem 0; border-bottom:1px solid var(--border); flex-wrap:wrap; }
 .rsv-row:last-child { border-bottom:none; }
-.rsv-row-label { color:var(--text-sub); }
-.rsv-row-value { color:var(--text-main); font-weight:400; }
-.qr-section { padding:1.2rem; border-top:1px solid var(--border-quiet); display:flex; flex-direction:column; align-items:center; gap:0.6rem; background:#000d18; }
-.empty-state { text-align:center; padding:4rem 0; color:var(--text-sub); }
-.empty-icon { font-size:2.5rem; margin-bottom:1rem; opacity:0.5; }
+.rsv-row-label { color:var(--text-secondary); font-size:0.82rem; }
+.rsv-row-value { color:var(--text-primary); font-weight:500; }
+.qr-section { padding:1.1rem; border-top:1px solid var(--border); display:flex; flex-direction:column; align-items:center; gap:0.6rem; background:var(--bg-raised); }
+.empty-state { text-align:center; padding:4rem 0; color:var(--text-secondary); }
+.empty-icon { font-size:2rem; margin-bottom:0.75rem; opacity:0.4; }
 
 /* 検索フォーム */
 .search-form {
   background:var(--bg-card);
-  border:1px solid var(--glass-border);
+  border:1px solid var(--border);
   border-radius:var(--radius-lg);
-  padding:1.25rem;
-  margin-bottom:1.5rem;
+  padding:1.1rem;
+  margin-bottom:1.25rem;
 }
-.search-title { font-size:0.72rem; letter-spacing:0.15em; color:var(--text-sub); margin-bottom:0.75rem; font-family:var(--font-display); }
-.search-row { display:flex; gap:0.75rem; flex-wrap:wrap; }
+.search-title {
+  font-size:0.7rem; font-weight:600; letter-spacing:0.08em; text-transform:uppercase;
+  color:var(--text-tertiary); margin-bottom:0.65rem;
+}
+.search-row { display:flex; gap:0.6rem; flex-wrap:wrap; }
 .search-row .form-input { min-width:0; flex:1 1 200px; }
 .search-row .btn { flex-shrink:0; }
 </style>
@@ -122,7 +125,7 @@ function renderCard(rsv, expanded = false) {
     <div class="rsv-card-header" data-toggle="${rsv.id}">
       <div>
         <div class="rsv-code">${rsv.reservation_code}</div>
-        <div style="font-size:0.75rem;color:var(--text-sub);margin-top:2px">${ev?.title || ''}</div>
+        <div style="font-size:0.75rem;color:var(--text-secondary);margin-top:2px">${ev?.title || ''}</div>
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
         <span class="badge rsv-status-badge ${isChecked ? 'badge-ok' : 'badge-few'}">${isChecked ? '入場済' : '未入場'}</span>
@@ -139,7 +142,7 @@ function renderCard(rsv, expanded = false) {
     </div>
     <div class="qr-section" id="qr-${rsv.id}" style="${expanded ? '' : 'display:none'}">
       <div class="qr-box" id="qrbox-${rsv.id}"></div>
-      <p style="font-size:0.7rem;color:var(--text-sub)">受付でこのQRをご提示ください</p>
+      <p style="font-size:0.7rem;color:var(--text-secondary)">受付でこのQRをご提示ください</p>
       <a href="/confirm.html?rid=${rsv.id}&token=${rsv.qr_token}&code=${rsv.reservation_code}"
          class="btn btn-ghost btn-sm">予約完了ページを開く</a>
     </div>`;

@@ -2,39 +2,39 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
 <meta name="theme-color" content="#000a10">
 <title>JAZZIN — スタッフログイン</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Cormorant+Garamond:ital,wght@1,300&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@300;400;500;600&family=Syne:wght@500;600;700&display=swap" rel="stylesheet">
 <script src="/config.js"></script>
 <link rel="stylesheet" href="/ui/style.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <style>
 body { display:flex; align-items:center; justify-content:center; min-height:100dvh; overflow:hidden; padding: env(safe-area-inset-top,0) env(safe-area-inset-right,0) env(safe-area-inset-bottom,0) env(safe-area-inset-left,0); }
-.login-wrap { width:100%; max-width:380px; padding:clamp(1rem,4vw,1.5rem); position:relative; z-index:1; }
+.login-wrap { width:100%; max-width:360px; padding:clamp(1rem,4vw,1.5rem); position:relative; z-index:1; }
 .login-logo {
   text-align:center;
   font-family: var(--font-display);
-  font-size: 3rem; letter-spacing: 0.15em;
-  /* ロゴのみグラデを維持 */
+  font-size: 2.8rem; letter-spacing: 0.18em;
   background: var(--grad-text); background-size:200% 200%;
   -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text;
-  margin-bottom: 0.25rem;
+  margin-bottom: 0.5rem;
 }
 .login-sub {
   text-align:center;
-  font-family: var(--font-serif); font-style:italic;
-  font-size:0.85rem; color:var(--text-sub);
-  letter-spacing:0.2em; margin-bottom:2rem;
+  font-family: var(--font-body);
+  font-size:0.75rem; font-weight:500;
+  letter-spacing:0.06em; text-transform:uppercase;
+  color:var(--text-tertiary); margin-bottom:1.75rem;
 }
-.login-line {
-  width:60px; height:1px; margin:0.6rem auto 1.8rem;
-  background: var(--grad-line);
+.login-divider {
+  width:32px; height:1px; margin:0 auto 1.5rem;
+  background: var(--border-strong);
 }
-.error-msg { font-size:0.78rem; color:var(--c-red); text-align:center; min-height:1.2em; }
-.form-stack { display:flex; flex-direction:column; gap:1rem; }
+.error-msg { font-size:0.8rem; color:var(--c-red); text-align:center; min-height:1.2em; }
+.form-stack { display:flex; flex-direction:column; gap:0.875rem; }
 </style>
 </head>
 <body>
@@ -47,10 +47,10 @@ body { display:flex; align-items:center; justify-content:center; min-height:100d
 
 <div class="login-wrap">
   <div class="login-logo">JAZZIN</div>
-  <div class="login-line"></div>
+  <div class="login-divider"></div>
   <p class="login-sub">Staff Login</p>
 
-  <div class="glass-card" style="padding:1.75rem">
+  <div class="glass-card" style="padding:1.5rem">
     <div class="form-stack">
       <div class="form-group">
         <label class="form-label">メールアドレス</label>
