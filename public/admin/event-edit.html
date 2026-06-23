@@ -465,21 +465,23 @@ window.addEventListener('beforeunload', e => {
 
 // ── Form collection / population ──────────────────────────────
 function collectFormData() {
+  // capacity: 空欄の場合は undefined にして UPDATE 時に上書きしない
+  const capacityRaw = $('f-capacity')?.value.trim();
+  const capacity    = capacityRaw ? (parseInt(capacityRaw) || null) : null;
+
   return {
     title:         $('f-title')?.value.trim() || '',
     event_at:      $('f-event-at')?.value || null,
     doors_open_at: $('f-doors-open')?.value || null,
     description:   $('f-description')?.value.trim() || null,
     hero_image_url:$('f-hero-image')?.value.trim() || null,
-    hero_crop_x:   parseFloat($('f-hero-crop-x')?.value)     || 0,
-    hero_crop_y:   parseFloat($('f-hero-crop-y')?.value)     || 0,
-    hero_crop_scale: parseFloat($('f-hero-crop-scale')?.value) || 1,
+    // ✅ hero_crop_* はDBカラムが存在しないため除外（400エラーの原因だったため削除）
     venue_name:    $('f-venue-name')?.value.trim() || '',
     venue_address: $('f-venue-address')?.value.trim() || null,
     venue_lat:     parseFloat($('f-lat')?.value) || null,
     venue_lng:     parseFloat($('f-lng')?.value) || null,
     ticket_price:  parseInt($('f-ticket-price')?.value) || 500,
-    capacity:      parseInt($('f-capacity')?.value) || null,
+    capacity,
     notes:         $('f-notes')?.value.trim() || null,
     status:        $('f-status')?.value || 'draft',
     publish_at:    $('f-publish-at')?.value || null,
@@ -502,15 +504,18 @@ function collectDynamicRows(listId, fields) {
 }
 
 function populateForm(data) {
-  const set = (id, val) => { const el = $(id); if (el && val != null) el.value = val; };
+  // val が null/undefined の場合はスキップ、空文字はセットする
+  const set = (id, val) => { const el = $(id); if (el && val !== null && val !== undefined) el.value = val; };
 
-  set('f-title',        data.title);
+  set('f-title',        data.title ?? '');
   set('f-event-at',     data.event_at ? toLocalDatetime(data.event_at) : '');
   set('f-doors-open',   data.doors_open_at ? toLocalDatetime(data.doors_open_at) : '');
-  set('f-description',  data.description);
+  set('f-description',  data.description ?? '');
   set('f-hero-image',   data.hero_image_url || '');
-  set('f-hero-crop-x',  data.hero_crop_x != null ? data.hero_crop_x : '0');
-  set('f-hero-crop-y',  data.hero_crop_y != null ? data.hero_crop_y : '0');
+
+  // ✅ hero_crop_* はUIのクロッパー制御用のみ（DBには保存しない）
+  set('f-hero-crop-x',     data.hero_crop_x   != null ? data.hero_crop_x   : '0');
+  set('f-hero-crop-y',     data.hero_crop_y   != null ? data.hero_crop_y   : '0');
   set('f-hero-crop-scale', data.hero_crop_scale != null ? data.hero_crop_scale : '1');
 
   // ヒーロー画像クロッパーに反映（initHeroUploader が先に呼ばれている場合）
@@ -558,14 +563,18 @@ function toLocalDatetime(iso) {
   return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-// ✅ datetime-local の値（ローカル時刻文字列）→ ISOString に変換する際、
-//    new Date("2025-07-01T19:00") はシステムのローカルTZとして解釈されるため正しい。
-//    ただし Safari 対策で "T" の前後をそのまま使い、明示的に toISOString() する。
+// ✅ datetime-local の値（ローカル時刻文字列＝JST）→ ISOString（UTC）に変換
+// "YYYY-MM-DDTHH:mm" 形式を受け取る。
+// new Date("YYYY-MM-DDTHH:mm") はブラウザのローカルTZ（JST = UTC+9）として解釈されるため
+// .toISOString() で UTC に変換すると -9h された正しいUTC値になる。
+// ⚠ Safari では "YYYY-MM-DDTHH:mm" をそのまま渡すと Invalid Date になる場合があるため
+//    秒を補完して渡す。
 function localDatetimeToISO(val) {
   if (!val) return null;
-  // "YYYY-MM-DDTHH:mm" 形式 → Dateはローカルとして解釈 → ISOString(UTC)で保存
-  const d = new Date(val);
-  return isNaN(d) ? null : d.toISOString();
+  // "YYYY-MM-DDTHH:mm" → "YYYY-MM-DDTHH:mm:00" でSafari対策
+  const normalized = val.length === 16 ? val + ':00' : val;
+  const d = new Date(normalized);
+  return isNaN(d.getTime()) ? null : d.toISOString();
 }
 
 // ── Dynamic rows ──────────────────────────────────────────────
@@ -631,14 +640,19 @@ async function saveEvent() {
     if (!data.venue_name) { showToast('⚠ 会場名を入力してください'); throw new Error('validation'); }
     if (!data.ticket_price || data.ticket_price < 0) { showToast('⚠ チケット料金を入力してください'); throw new Error('validation'); }
 
-    // datetime-local（ローカル時刻）→ ISO（UTC）
+    // ✅ datetime-local（ローカル時刻 = JST）→ ISOString（UTC）に変換
+    // localDatetimeToISO: new Date("YYYY-MM-DDTHH:mm") はブラウザのローカルTZで解釈される
     const payload = {
       ...data,
       event_at:      localDatetimeToISO(data.event_at),
       doors_open_at: localDatetimeToISO(data.doors_open_at),
       publish_at:    localDatetimeToISO(data.publish_at),
     };
+    // ✅ DB に存在しないキーを必ず削除
     delete payload._savedAt;
+    delete payload.hero_crop_x;
+    delete payload.hero_crop_y;
+    delete payload.hero_crop_scale;
 
     let savedId = EVENT_ID;
 
