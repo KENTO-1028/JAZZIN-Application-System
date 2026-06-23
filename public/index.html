@@ -41,6 +41,16 @@
   background: linear-gradient(90deg, transparent, var(--accent-1), transparent);
 }
 .events-empty { text-align:center; padding:4rem 0; color:var(--text-sub); }
+/* 管理者リンク：極めて目立たない */
+#admin-link {
+  font-size: 0.6rem;
+  color: rgba(255,255,255,0.1);
+  text-decoration: none;
+  padding: 0.25rem 0.4rem;
+  letter-spacing: 0.04em;
+  transition: color 200ms;
+}
+#admin-link:hover { color: rgba(255,255,255,0.3); }
 </style>
 </head>
 <body>
@@ -58,7 +68,7 @@
       <img src="/assets/jazzin_logo.png" alt="JAZZIN" height="26">
     </a>
     <nav style="display:flex;gap:0.5rem;align-items:center">
-      <a href="/admin/login.html" class="btn btn-ghost btn-sm" id="admin-link">管理者ログイン</a>
+      <a href="/admin/login.html" id="admin-link">staff</a>
     </nav>
   </div>
 </header>
@@ -153,9 +163,14 @@ async function loadEvents() {
   }
 }
 
+// ログイン済みなら管理リンクのテキストを「管理画面」に変更
 (async () => {
   const { data } = await supabase.auth.getUser();
-  if (data?.user) { const l = document.getElementById('admin-link'); l.textContent='管理画面'; l.href='/admin/index.html'; }
+  if (data?.user) {
+    const l = document.getElementById('admin-link');
+    l.textContent = '管理画面';
+    l.href = '/admin/index.html';
+  }
 })();
 
 loadEvents();

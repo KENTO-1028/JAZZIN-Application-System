@@ -234,7 +234,19 @@ body { min-height:100dvh; }
     <div class="form-stack">
       <div class="form-group">
         <label class="form-label">お名前 *</label>
-        <input type="text" class="form-input" id="f-name" placeholder="山田 太郎" autocomplete="name">
+        <div style="display:flex;gap:0.5rem">
+          <input type="text" class="form-input" id="f-last-name" placeholder="山田" autocomplete="family-name" style="flex:1">
+          <input type="text" class="form-input" id="f-first-name" placeholder="太郎" autocomplete="given-name" style="flex:1">
+        </div>
+        <div style="font-size:0.72rem;color:var(--text-tertiary);margin-top:0.3rem;padding-left:2px">姓　　　　　　　　名</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">フリガナ *</label>
+        <div style="display:flex;gap:0.5rem">
+          <input type="text" class="form-input" id="f-last-kana" placeholder="ヤマダ" autocomplete="off" style="flex:1" inputmode="katakana">
+          <input type="text" class="form-input" id="f-first-kana" placeholder="タロウ" autocomplete="off" style="flex:1" inputmode="katakana">
+        </div>
+        <div style="font-size:0.72rem;color:var(--text-tertiary);margin-top:0.3rem;padding-left:2px">セイ　　　　　　　メイ</div>
       </div>
       <div class="form-group">
         <label class="form-label">メールアドレス *</label>
@@ -246,7 +258,7 @@ body { min-height:100dvh; }
       </div>
       <div class="form-group">
         <label class="form-label">備考（任意）</label>
-        <input type="text" class="form-input" id="f-notes" placeholder="アレルギーなど">
+        <input type="text" class="form-input" id="f-notes" placeholder="車椅子席希望・補助犬同伴など">
       </div>
       <div id="modal-summary" style="background:var(--bg-raised);border:1px solid var(--border);border-radius:var(--radius);padding:0.9rem;font-size:0.875rem;color:var(--text-secondary);margin-bottom:1rem"></div>
       <div style="display:flex;gap:0.75rem;margin-top:0.3rem">
@@ -627,15 +639,18 @@ document.addEventListener('click', e => {
   if (e.target.id === 'btn-modal-cancel') closeFormModal();
 });
 
-['f-name', 'f-email'].forEach(id => {
+['f-last-name', 'f-first-name', 'f-last-kana', 'f-first-kana', 'f-email'].forEach(id => {
   document.addEventListener('input', e => { if (e.target.id === id) validateForm(); });
 });
 
 function validateForm() {
-  const name  = document.getElementById('f-name')?.value.trim();
-  const email = document.getElementById('f-email')?.value.trim();
-  const btn   = document.getElementById('btn-confirm');
-  if (btn) btn.disabled = !(name && email && email.includes('@'));
+  const lastName  = document.getElementById('f-last-name')?.value.trim();
+  const firstName = document.getElementById('f-first-name')?.value.trim();
+  const lastKana  = document.getElementById('f-last-kana')?.value.trim();
+  const firstKana = document.getElementById('f-first-kana')?.value.trim();
+  const email     = document.getElementById('f-email')?.value.trim();
+  const btn       = document.getElementById('btn-confirm');
+  if (btn) btn.disabled = !(lastName && firstName && lastKana && firstKana && email && email.includes('@'));
 }
 
 document.addEventListener('click', async e => {
@@ -644,13 +659,22 @@ document.addEventListener('click', async e => {
   btn.disabled = true;
   document.getElementById('confirm-spinner').style.display = 'inline-block';
   try {
+    const lastName   = document.getElementById('f-last-name').value.trim();
+    const firstName  = document.getElementById('f-first-name').value.trim();
+    const lastKana   = document.getElementById('f-last-kana').value.trim();
+    const firstKana  = document.getElementById('f-first-kana').value.trim();
+    const fullName   = `${lastName} ${firstName}`;
+    const fullKana   = `${lastKana} ${firstKana}`;
+    const notesRaw   = document.getElementById('f-notes').value.trim();
+    const notesWithKana = fullKana ? `【フリガナ】${fullKana}${notesRaw ? '\n' + notesRaw : ''}` : notesRaw;
+
     const result = await confirmReservation({
       eventId:    EVENT_ID,
       seatIds:    [...selectedIds],
-      guestName:  document.getElementById('f-name').value.trim(),
+      guestName:  fullName,
       guestEmail: document.getElementById('f-email').value.trim(),
       guestPhone: document.getElementById('f-phone').value.trim(),
-      notes:      document.getElementById('f-notes').value.trim(),
+      notes:      notesWithKana,
     });
     if (!result.success) {
       showToast(result.error === 'seats_expired_or_taken'

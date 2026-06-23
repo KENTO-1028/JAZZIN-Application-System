@@ -290,9 +290,12 @@ async function onQRSuccess(text) {
 function renderGuest(rsv) {
   const seats = Array.isArray(rsv.seats) ? rsv.seats.map(s=>s.label).join(' / ') : '--';
   const total = (rsv.ticket_price||500)*rsv.num_seats;
+  const kanaMatch = (rsv.notes||'').match(/【フリガナ】([^\n]+)/);
+  const kana = kanaMatch ? kanaMatch[1] : '';
   document.getElementById('guest-display').innerHTML=`
     <div class="guest-card state-ready">
       <div class="g-name">${rsv.guest_name}</div>
+      ${kana ? `<div style="font-size:0.85rem;color:var(--text-secondary);letter-spacing:0.08em;margin-top:-0.15rem;margin-bottom:0.3rem">${kana}</div>` : ''}
       <div class="g-seats">${seats}</div>
       <div class="g-meta">
         <span>${rsv.num_seats}名</span>
