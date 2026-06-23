@@ -7,7 +7,7 @@
 <title>JAZZIN — イベント編集</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@300;400;500;600&family=Syne:wght@500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&family=Noto+Serif+JP:wght@300;400;600&family=Bebas+Neue&display=swap" rel="stylesheet">
 <script src="/config.js"></script>
 <link rel="stylesheet" href="/ui/style.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
@@ -210,9 +210,52 @@ body { min-height:100dvh; }
             <label class="form-label">説明・概要</label>
             <textarea class="form-input" id="f-description" rows="4" placeholder="イベントの説明文..."></textarea>
           </div>
+
+          <!-- ヒーロー画像：直接アップロード＋クロップ -->
           <div class="form-group">
-            <label class="form-label">ヒーロー画像URL</label>
-            <input type="url" class="form-input" id="f-hero-image" placeholder="https://...">
+            <label class="form-label">ヒーロー画像</label>
+            <div id="hero-upload-area" style="border:1px dashed var(--border-hi);border-radius:var(--r);overflow:hidden;cursor:pointer;position:relative;background:var(--bg-raised)">
+              <!-- プレビュー＋クロップ -->
+              <div id="hero-crop-wrap" style="display:none;position:relative;width:100%;aspect-ratio:16/9;overflow:hidden;background:#000;touch-action:none">
+                <img id="hero-crop-img" src="" alt="" style="position:absolute;max-width:none;cursor:move;user-select:none;-webkit-user-select:none" draggable="false">
+                <!-- グリッドオーバーレイ -->
+                <div style="position:absolute;inset:0;pointer-events:none;background:
+                  linear-gradient(rgba(255,255,255,.08) 1px,transparent 1px) 0 33.3%/100% 33.3% no-repeat,
+                  linear-gradient(rgba(255,255,255,.08) 1px,transparent 1px) 0 66.6%/100% 33.3% no-repeat,
+                  linear-gradient(90deg,rgba(255,255,255,.08) 1px,transparent 1px) 33.3% 0/33.3% 100% no-repeat,
+                  linear-gradient(90deg,rgba(255,255,255,.08) 1px,transparent 1px) 66.6% 0/33.3% 100% no-repeat"></div>
+                <!-- 操作ヒント -->
+                <div id="hero-crop-hint" style="position:absolute;bottom:8px;left:0;right:0;text-align:center;font-size:.72rem;color:rgba(255,255,255,.6);pointer-events:none">
+                  ドラッグ: 位置調整 ／ ピンチ: 拡縮
+                </div>
+                <!-- ズームコントロール -->
+                <div style="position:absolute;top:8px;right:8px;display:flex;flex-direction:column;gap:4px">
+                  <button type="button" id="hero-zoom-in"  style="width:32px;height:32px;background:rgba(0,0,0,.55);border:1px solid rgba(255,255,255,.18);border-radius:3px;color:#fff;font-size:1.1rem;cursor:pointer;display:flex;align-items:center;justify-content:center">＋</button>
+                  <button type="button" id="hero-zoom-out" style="width:32px;height:32px;background:rgba(0,0,0,.55);border:1px solid rgba(255,255,255,.18);border-radius:3px;color:#fff;font-size:1.1rem;cursor:pointer;display:flex;align-items:center;justify-content:center">－</button>
+                </div>
+              </div>
+              <!-- 空状態 -->
+              <div id="hero-empty" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.5rem;padding:2rem;aspect-ratio:16/9">
+                <div style="font-size:2rem;opacity:.3">🖼</div>
+                <div style="font-size:.85rem;color:var(--fg-2)">クリックまたはドラッグ＆ドロップで画像を選択</div>
+                <div style="font-size:.72rem;color:var(--fg-3)">JPEG / PNG / WebP — 圧縮なしでアップロード</div>
+              </div>
+              <!-- 隠しinput -->
+              <input type="file" id="hero-file-input" accept="image/jpeg,image/png,image/webp,image/gif" style="position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%">
+            </div>
+            <!-- アクションバー -->
+            <div id="hero-actions" style="display:none;margin-top:.5rem;display:none;gap:.5rem;flex-wrap:wrap;align-items:center">
+              <button type="button" id="hero-reselect" class="btn btn-ghost btn-sm">別の画像を選択</button>
+              <button type="button" id="hero-reset-crop" class="btn btn-ghost btn-sm">位置リセット</button>
+              <button type="button" id="hero-remove" class="btn btn-sm" style="color:var(--c-red);border-color:rgba(224,85,85,.25)">削除</button>
+              <span id="hero-file-name" style="font-size:.72rem;color:var(--fg-3);margin-left:auto"></span>
+            </div>
+            <!-- DB保存用URL（Supabase Storageへのアップロード後のURL、またはcrop情報） -->
+            <input type="hidden" id="f-hero-image">
+            <!-- クロップ情報 -->
+            <input type="hidden" id="f-hero-crop-x" value="0">
+            <input type="hidden" id="f-hero-crop-y" value="0">
+            <input type="hidden" id="f-hero-crop-scale" value="1">
           </div>
         </div>
       </div>
@@ -428,6 +471,9 @@ function collectFormData() {
     doors_open_at: $('f-doors-open')?.value || null,
     description:   $('f-description')?.value.trim() || null,
     hero_image_url:$('f-hero-image')?.value.trim() || null,
+    hero_crop_x:   parseFloat($('f-hero-crop-x')?.value)     || 0,
+    hero_crop_y:   parseFloat($('f-hero-crop-y')?.value)     || 0,
+    hero_crop_scale: parseFloat($('f-hero-crop-scale')?.value) || 1,
     venue_name:    $('f-venue-name')?.value.trim() || '',
     venue_address: $('f-venue-address')?.value.trim() || null,
     venue_lat:     parseFloat($('f-lat')?.value) || null,
@@ -462,7 +508,20 @@ function populateForm(data) {
   set('f-event-at',     data.event_at ? toLocalDatetime(data.event_at) : '');
   set('f-doors-open',   data.doors_open_at ? toLocalDatetime(data.doors_open_at) : '');
   set('f-description',  data.description);
-  set('f-hero-image',   data.hero_image_url);
+  set('f-hero-image',   data.hero_image_url || '');
+  set('f-hero-crop-x',  data.hero_crop_x != null ? data.hero_crop_x : '0');
+  set('f-hero-crop-y',  data.hero_crop_y != null ? data.hero_crop_y : '0');
+  set('f-hero-crop-scale', data.hero_crop_scale != null ? data.hero_crop_scale : '1');
+
+  // ヒーロー画像クロッパーに反映（initHeroUploader が先に呼ばれている場合）
+  if (window.__heroSetUrl && data.hero_image_url) {
+    window.__heroSetUrl(
+      data.hero_image_url,
+      data.hero_crop_x   || 0,
+      data.hero_crop_y   || 0,
+      data.hero_crop_scale || 1
+    );
+  }
   set('f-venue-name',   data.venue_name);
   set('f-venue-address',data.venue_address);
   set('f-lat',          data.venue_lat);
@@ -741,6 +800,323 @@ async function init() {
 
   // Save button
   $('btn-save-event').addEventListener('click', saveEvent);
+
+  // ── ヒーロー画像 アップロード＋クロップ ────────────────────────
+  initHeroUploader();
+}
+
+// ═══════════════════════════════════════════════════════════
+// ヒーロー画像アップローダー
+// ・直接アップロード（圧縮なし） → Supabase Storage
+// ・表示領域(16:9)内でドラッグ・ピンチ操作で位置・拡縮を調整
+// ・保存時に crop 情報を DB へ一緒に保存
+// ═══════════════════════════════════════════════════════════
+function initHeroUploader() {
+  const fileInput    = $('hero-file-input');
+  const uploadArea   = $('hero-upload-area');
+  const cropWrap     = $('hero-crop-wrap');
+  const cropImg      = $('hero-crop-img');
+  const emptyState   = $('hero-empty');
+  const actionsBar   = $('hero-actions');
+  const heroUrlInput = $('f-hero-image');
+  const cropXInput   = $('f-hero-crop-x');
+  const cropYInput   = $('f-hero-crop-y');
+  const cropScInput  = $('f-hero-crop-scale');
+
+  let imgW = 0, imgH = 0;        // 自然サイズ
+  let viewW = 0, viewH = 0;      // 表示エリアサイズ
+  let posX = 0, posY = 0;        // 現在のオフセット(px)
+  let scale = 1;                  // 現在のスケール
+  let minScale = 1;              // 最小スケール（エリアを覆う最小値）
+
+  // ── ドラッグ変数 ──
+  let dragging = false;
+  let dragStartX = 0, dragStartY = 0;
+  let dragOriginX = 0, dragOriginY = 0;
+
+  // ── ピンチ変数 ──
+  let pinching = false;
+  let pinchDist0 = 0, scale0 = 1;
+
+  // 既存データのロード（編集時）
+  function loadExistingHero(url, cropX, cropY, cropScale) {
+    if (!url) return;
+    cropImg.src = url;
+    cropImg.onload = () => {
+      imgW = cropImg.naturalWidth;
+      imgH = cropImg.naturalHeight;
+      updateViewSize();
+      scale    = parseFloat(cropScale) || minScale;
+      posX     = parseFloat(cropX) || 0;
+      posY     = parseFloat(cropY) || 0;
+      clampPos();
+      applyTransform();
+      showCropUI();
+    };
+    cropImg.onerror = () => {
+      // URL が壊れていてもクロップUIは出さない
+      showEmptyState();
+    };
+  }
+
+  // 既存URLとcrop情報があれば復元
+  const existingUrl = heroUrlInput.value;
+  if (existingUrl) {
+    loadExistingHero(
+      existingUrl,
+      parseFloat(cropXInput.value) || 0,
+      parseFloat(cropYInput.value) || 0,
+      parseFloat(cropScInput.value) || 1
+    );
+  }
+
+  // ── ファイル選択 ──
+  fileInput.addEventListener('change', () => {
+    const file = fileInput.files[0];
+    if (file) handleFile(file);
+  });
+
+  // ── ドラッグ＆ドロップ ──
+  uploadArea.addEventListener('dragover', e => { e.preventDefault(); uploadArea.style.borderColor = 'var(--accent)'; });
+  uploadArea.addEventListener('dragleave', () => { uploadArea.style.borderColor = 'var(--border-hi)'; });
+  uploadArea.addEventListener('drop', e => {
+    e.preventDefault();
+    uploadArea.style.borderColor = 'var(--border-hi)';
+    const file = e.dataTransfer.files[0];
+    if (file && file.type.startsWith('image/')) handleFile(file);
+  });
+
+  // アクションボタン
+  $('hero-reselect').addEventListener('click', () => fileInput.click());
+  $('hero-reset-crop').addEventListener('click', resetCrop);
+  $('hero-remove').addEventListener('click', removeHero);
+  $('hero-zoom-in').addEventListener('click',  () => { scale = Math.min(scale * 1.15, 5); clampPos(); applyTransform(); saveCrop(); });
+  $('hero-zoom-out').addEventListener('click', () => { scale = Math.max(scale / 1.15, minScale); clampPos(); applyTransform(); saveCrop(); });
+
+  async function handleFile(file) {
+    // プレビュー表示（アップロード前）
+    const localUrl = URL.createObjectURL(file);
+    cropImg.src = localUrl;
+    cropImg.onload = async () => {
+      imgW = cropImg.naturalWidth;
+      imgH = cropImg.naturalHeight;
+      updateViewSize();
+      resetCropValues();
+      applyTransform();
+      showCropUI();
+      $('hero-file-name').textContent = `${file.name} (${(file.size/1024/1024).toFixed(1)} MB)`;
+
+      // Supabase Storage へ圧縮なしでアップロード
+      await uploadToStorage(file);
+    };
+  }
+
+  async function uploadToStorage(file) {
+    try {
+      const ext  = file.name.split('.').pop().toLowerCase();
+      const path = `hero/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+
+      showToast('画像をアップロード中...');
+
+      const { data, error } = await supabase.storage
+        .from('event-images')
+        .upload(path, file, {
+          cacheControl: '3600',
+          upsert: false,
+          contentType: file.type,
+        });
+
+      if (error) {
+        // バケット未作成の場合のフォールバック：base64 Data URL として保存
+        console.warn('Storage upload failed, using objectURL:', error.message);
+        // objectURL は永続しないので data URL に変換
+        const reader = new FileReader();
+        reader.onload = e => {
+          heroUrlInput.value = e.target.result;
+          saveCrop();
+          showToast('画像を設定しました（ローカル）');
+        };
+        reader.readAsDataURL(file);
+        return;
+      }
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('event-images')
+        .getPublicUrl(data.path);
+
+      heroUrlInput.value = publicUrl;
+      saveCrop();
+      showToast('✓ 画像をアップロードしました');
+      markDirty();
+
+    } catch (err) {
+      console.error('upload error:', err);
+      showToast('アップロードに失敗しました: ' + err.message);
+    }
+  }
+
+  function updateViewSize() {
+    viewW = cropWrap.clientWidth  || cropWrap.offsetWidth  || 560;
+    viewH = cropWrap.clientHeight || cropWrap.offsetHeight || 315;
+    // 最小スケール：画像がエリア全体を覆う最小サイズ
+    const scaleW = viewW / imgW;
+    const scaleH = viewH / imgH;
+    minScale = Math.max(scaleW, scaleH);
+    if (scale < minScale) scale = minScale;
+  }
+
+  function resetCropValues() {
+    updateViewSize();
+    scale = minScale;
+    posX  = (viewW - imgW * scale) / 2;
+    posY  = (viewH - imgH * scale) / 2;
+    saveCrop();
+  }
+
+  function resetCrop() {
+    resetCropValues();
+    applyTransform();
+    saveCrop();
+  }
+
+  function clampPos() {
+    updateViewSize();
+    const sw = imgW * scale;
+    const sh = imgH * scale;
+    const minX = Math.min(0, viewW - sw);
+    const minY = Math.min(0, viewH - sh);
+    const maxX = Math.max(0, viewW - sw);
+    const maxY = Math.max(0, viewH - sh);
+    posX = Math.max(minX, Math.min(maxX, posX));
+    posY = Math.max(minY, Math.min(maxY, posY));
+  }
+
+  function applyTransform() {
+    cropImg.style.width  = (imgW * scale) + 'px';
+    cropImg.style.height = (imgH * scale) + 'px';
+    cropImg.style.left   = posX + 'px';
+    cropImg.style.top    = posY + 'px';
+  }
+
+  function saveCrop() {
+    cropXInput.value  = posX.toFixed(3);
+    cropYInput.value  = posY.toFixed(3);
+    cropScInput.value = scale.toFixed(5);
+  }
+
+  // ── マウスドラッグ ──
+  cropWrap.addEventListener('mousedown', e => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    dragging = true;
+    dragStartX = e.clientX; dragStartY = e.clientY;
+    dragOriginX = posX; dragOriginY = posY;
+    cropWrap.style.cursor = 'grabbing';
+  });
+  window.addEventListener('mousemove', e => {
+    if (!dragging) return;
+    posX = dragOriginX + (e.clientX - dragStartX);
+    posY = dragOriginY + (e.clientY - dragStartY);
+    clampPos(); applyTransform();
+  });
+  window.addEventListener('mouseup', () => {
+    if (!dragging) return;
+    dragging = false; cropWrap.style.cursor = 'move';
+    saveCrop(); markDirty();
+  });
+
+  // ── マウスホイールズーム ──
+  cropWrap.addEventListener('wheel', e => {
+    e.preventDefault();
+    const delta = e.deltaY > 0 ? 0.9 : 1.1;
+    const newScale = Math.max(minScale, Math.min(5, scale * delta));
+    // ホイール位置を中心にズーム
+    const rect  = cropWrap.getBoundingClientRect();
+    const mx    = e.clientX - rect.left;
+    const my    = e.clientY - rect.top;
+    const ratio = newScale / scale;
+    posX = mx - ratio * (mx - posX);
+    posY = my - ratio * (my - posY);
+    scale = newScale;
+    clampPos(); applyTransform(); saveCrop(); markDirty();
+  }, { passive: false });
+
+  // ── タッチ：ドラッグ＋ピンチ ──
+  cropWrap.addEventListener('touchstart', e => {
+    if (e.touches.length === 1) {
+      dragging = true;
+      dragStartX = e.touches[0].clientX; dragStartY = e.touches[0].clientY;
+      dragOriginX = posX; dragOriginY = posY;
+    } else if (e.touches.length === 2) {
+      dragging = false; pinching = true;
+      pinchDist0 = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      scale0 = scale;
+    }
+    e.preventDefault();
+  }, { passive: false });
+
+  cropWrap.addEventListener('touchmove', e => {
+    e.preventDefault();
+    if (dragging && e.touches.length === 1) {
+      posX = dragOriginX + (e.touches[0].clientX - dragStartX);
+      posY = dragOriginY + (e.touches[0].clientY - dragStartY);
+      clampPos(); applyTransform();
+    } else if (pinching && e.touches.length === 2) {
+      const dist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      scale = Math.max(minScale, Math.min(5, scale0 * (dist / pinchDist0)));
+      clampPos(); applyTransform();
+    }
+  }, { passive: false });
+
+  cropWrap.addEventListener('touchend', () => {
+    dragging = false; pinching = false;
+    saveCrop(); markDirty();
+  });
+
+  // ── UI state helpers ──
+  function showCropUI() {
+    emptyState.style.display    = 'none';
+    fileInput.style.display     = 'none';   // file input は非表示（再選択ボタンで代替）
+    cropWrap.style.display      = 'block';
+    actionsBar.style.display    = 'flex';
+    $('hero-crop-hint').style.display = 'block';
+  }
+  function showEmptyState() {
+    cropWrap.style.display      = 'none';
+    actionsBar.style.display    = 'none';
+    emptyState.style.display    = 'flex';
+    fileInput.style.display     = '';
+  }
+  function removeHero() {
+    heroUrlInput.value = '';
+    cropXInput.value   = '0';
+    cropYInput.value   = '0';
+    cropScInput.value  = '1';
+    cropImg.src        = '';
+    showEmptyState();
+    markDirty();
+    showToast('画像を削除しました');
+  }
+
+  // ResizeObserver で表示エリアサイズ変更に追従
+  if (typeof ResizeObserver !== 'undefined') {
+    new ResizeObserver(() => {
+      if (cropImg.src && cropWrap.style.display !== 'none') {
+        updateViewSize();
+        if (scale < minScale) scale = minScale;
+        clampPos(); applyTransform();
+      }
+    }).observe(cropWrap);
+  }
+
+  // populateForm から呼ばれる想定のグローバル関数
+  window.__heroSetUrl = (url, cx, cy, cs) => loadExistingHero(url, cx, cy, cs);
 }
 
 init();
