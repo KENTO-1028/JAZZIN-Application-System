@@ -199,7 +199,7 @@ textarea.form-input { min-height: 80px; resize: vertical; }
           <thead>
             <tr>
               <th>受付番号</th><th>名前</th><th>座席</th><th>人数</th>
-              <th>支払</th><th>チェックイン</th>
+              <th>支払</th><th>チェックイン</th><th>状態</th><th>操作</th>
             </tr>
           </thead>
           <tbody id="rsv-tbody"></tbody>
@@ -341,7 +341,7 @@ textarea.form-input { min-height: 80px; resize: vertical; }
 <div id="toast"></div>
 
 <script type="module">
-import { supabase, signOut, formatDate, formatPrice } from '/core/supabase.js';
+import { supabase, signOut, formatDate, formatPrice, cancelReservation } from '/core/supabase.js';
 
 function showToast(msg,ms=2000){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),ms);}
 
@@ -395,10 +395,13 @@ document.getElementById('sel-event').addEventListener('change', e => {
 });
 
 // ── Dashboard ────────────────────────────────────────────────
+let currentDashboardEvent = null;
+
 async function loadDashboard(ev) {
+  currentDashboardEvent = ev;
   const [rsvData, checkinData] = await Promise.all([
     supabase.from('reservations')
-      .select('id, reservation_code, guest_name, num_seats, payment_status, reservation_seats(seat:seats(label))')
+      .select('id, reservation_code, guest_name, num_seats, payment_status, status, reservation_seats(seat:seats(label))')
       .eq('event_id', ev.id)
       .order('created_at'),
     supabase.from('checkins')
@@ -409,28 +412,59 @@ async function loadDashboard(ev) {
   const reservations = rsvData.data || [];
   const checkins = new Set((checkinData.data||[]).map(c=>c.reservation_id));
 
-  const totalPeople = reservations.reduce((s,r)=>s+r.num_seats,0);
-  const checkedIn   = reservations.filter(r=>checkins.has(r.id)).length;
-  const cashSeats   = reservations.filter(r=>r.payment_status==='paid_cash').reduce((s,r)=>s+r.num_seats,0);
+  // ✅ 統計はキャンセル済みを除いた「有効な予約」のみで計算する
+  const activeRsvs  = reservations.filter(r => r.status !== 'cancelled');
+  const totalPeople = activeRsvs.reduce((s,r)=>s+r.num_seats,0);
+  const checkedIn   = activeRsvs.filter(r=>checkins.has(r.id)).length;
+  const cashSeats   = activeRsvs.filter(r=>r.payment_status==='paid_cash').reduce((s,r)=>s+r.num_seats,0);
 
   document.getElementById('s-reservations').textContent = totalPeople;
   document.getElementById('s-checkins').textContent     = checkedIn;
-  document.getElementById('s-remaining').textContent    = reservations.length - checkedIn;
+  document.getElementById('s-remaining').textContent    = activeRsvs.length - checkedIn;
   document.getElementById('s-cash').textContent         = formatPrice(cashSeats * (ev.ticket_price||500));
 
   const tbody = document.getElementById('rsv-tbody');
   tbody.innerHTML = reservations.map(r => {
     const seats = r.reservation_seats?.map(rs=>rs.seat?.label).join(' ') || '--';
     const isIn  = checkins.has(r.id);
-    return `<tr>
+    const isCancelled = r.status === 'cancelled';
+    return `<tr style="${isCancelled ? 'opacity:0.45' : ''}">
       <td style="font-weight:600;color:var(--accent-1)">${r.reservation_code}</td>
       <td>${r.guest_name}</td>
       <td>${seats}</td>
       <td>${r.num_seats}</td>
       <td><span class="badge ${r.payment_status==='paid_cash'?'badge-ok':'badge-sold'}">${r.payment_status==='paid_cash'?'支払済':'未払い'}</span></td>
       <td><span class="badge ${isIn?'badge-ok':''}">${isIn?'入場済':'未入場'}</span></td>
+      <td><span class="badge ${isCancelled?'badge-sold':'badge-ok'}">${isCancelled?'キャンセル済':'有効'}</span></td>
+      <td>${isCancelled
+        ? ''
+        : `<button class="btn btn-ghost btn-sm" data-cancel-rsv="${r.id}" style="color:var(--c-red);border-color:rgba(255,107,107,0.2)">キャンセル</button>`}</td>
     </tr>`;
   }).join('');
+
+  // ✅ キャンセルボタン
+  tbody.querySelectorAll('[data-cancel-rsv]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const rsvId = btn.dataset.cancelRsv;
+      const r = reservations.find(x => x.id === rsvId);
+      if (!r) return;
+      if (!confirm(`予約「${r.reservation_code}」（${r.guest_name} 様）をキャンセルしますか？\n座席は再び予約可能な空席に戻ります。この操作は取り消せません。`)) return;
+      btn.disabled = true; btn.textContent = 'キャンセル中...';
+      try {
+        const result = await cancelReservation(rsvId);
+        if (!result?.success) {
+          showToast('キャンセル失敗: ' + (result?.error || 'エラー'));
+          btn.disabled = false; btn.textContent = 'キャンセル';
+          return;
+        }
+        showToast('予約をキャンセルしました');
+        await loadDashboard(currentDashboardEvent);
+      } catch (err) {
+        showToast('キャンセル失敗: ' + (err.message || 'エラー'));
+        btn.disabled = false; btn.textContent = 'キャンセル';
+      }
+    });
+  });
 
   // CSV export
   document.getElementById('btn-csv').onclick = () => exportCSV(ev, reservations, checkins);

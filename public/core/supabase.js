@@ -104,6 +104,15 @@ export async function confirmReservation({
   return data; // { success, reservation_id, reservation_code, qr_token }
 }
 
+// ── Cancel helpers（管理者のみ実行可能。RPC側で認証チェック） ──
+export async function cancelReservation(reservationId) {
+  const { data, error } = await supabase.rpc('cancel_reservation', {
+    p_reservation_id: reservationId,
+  });
+  if (error) throw error;
+  return data; // { success, error? }
+}
+
 // ── Checkin helpers ─────────────────────────────────────────
 export async function processCheckin(qrToken) {
   const { data, error } = await supabase.rpc('process_checkin', {
