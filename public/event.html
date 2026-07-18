@@ -658,38 +658,62 @@ document.addEventListener('click', async e => {
   const btn = e.target;
   btn.disabled = true;
   document.getElementById('confirm-spinner').style.display = 'inline-block';
-  try {
-    const lastName   = document.getElementById('f-last-name').value.trim();
-    const firstName  = document.getElementById('f-first-name').value.trim();
-    const lastKana   = document.getElementById('f-last-kana').value.trim();
-    const firstKana  = document.getElementById('f-first-kana').value.trim();
-    const fullName   = `${lastName} ${firstName}`;
-    const fullKana   = `${lastKana} ${firstKana}`;
-    const notesRaw   = document.getElementById('f-notes').value.trim();
-    const notesWithKana = fullKana ? `【フリガナ】${fullKana}${notesRaw ? '\n' + notesRaw : ''}` : notesRaw;
 
-    const result = await confirmReservation({
-      eventId:    EVENT_ID,
-      seatIds:    [...selectedIds],
-      guestName:  fullName,
-      guestEmail: document.getElementById('f-email').value.trim(),
-      guestPhone: document.getElementById('f-phone').value.trim(),
-      notes:      notesWithKana,
-    });
-    if (!result.success) {
-      showToast(result.error === 'seats_expired_or_taken'
-        ? '仮ロックが期限切れです' : 'エラーが発生しました');
-      closeFormModal();
-      return;
-    }
-    clearInterval(lockTimer);
-    location.href = `/confirm.html?rid=${result.reservation_id}&token=${result.qr_token}&code=${result.reservation_code}`;
-  } catch (err) {
-    console.error(err);
-    showToast('エラーが発生しました');
-    btn.disabled = false;
-    document.getElementById('confirm-spinner').style.display = 'none';
+  const lastName   = document.getElementById('f-last-name').value.trim();
+  const firstName  = document.getElementById('f-first-name').value.trim();
+  const lastKana   = document.getElementById('f-last-kana').value.trim();
+  const firstKana  = document.getElementById('f-first-kana').value.trim();
+  const fullName   = `${lastName} ${firstName}`;
+  const fullKana   = `${lastKana} ${firstKana}`;
+  const notesRaw   = document.getElementById('f-notes').value.trim();
+  const notesWithKana = fullKana ? `【フリガナ】${fullKana}${notesRaw ? '\n' + notesRaw : ''}` : notesRaw;
+
+  const payload = {
+    eventId:    EVENT_ID,
+    seatIds:    [...selectedIds],
+    guestName:  fullName,
+    guestEmail: document.getElementById('f-email').value.trim(),
+    guestPhone: document.getElementById('f-phone').value.trim(),
+    notes:      notesWithKana,
+  };
+
+  // ネットワーク由来のエラー（DNS瞬断・回線切替など）だけ自動リトライする。
+  // アプリ側のエラー（座席が取られた等）は即座に中断してユーザーに伝える。
+  function isNetworkError(err) {
+    return err instanceof TypeError
+      || /NAME_NOT_RESOLVED|Failed to fetch|network/i.test(err?.message || '');
   }
+
+  async function attemptConfirm(retriesLeft) {
+    try {
+      const result = await confirmReservation(payload);
+      if (!result.success) {
+        showToast(result.error === 'seats_expired_or_taken'
+          ? '仮ロックが期限切れです' : 'エラーが発生しました');
+        closeFormModal();
+        btn.disabled = false;
+        document.getElementById('confirm-spinner').style.display = 'none';
+        return;
+      }
+      clearInterval(lockTimer);
+      location.href = `/confirm.html?rid=${result.reservation_id}&token=${result.qr_token}&code=${result.reservation_code}`;
+    } catch (err) {
+      if (isNetworkError(err) && retriesLeft > 0) {
+        console.warn(`[JAZZIN] confirm_reservation network error, retrying... (${retriesLeft} left)`, err);
+        await new Promise(r => setTimeout(r, 1500));
+        return attemptConfirm(retriesLeft - 1);
+      }
+      console.error(err);
+      // フォームは閉じない：ロックが有効な間はそのまま再送信できるようにする
+      showToast(isNetworkError(err)
+        ? '通信エラーが発生しました。電波状況をご確認の上、もう一度お試しください'
+        : 'エラーが発生しました');
+      btn.disabled = false;
+      document.getElementById('confirm-spinner').style.display = 'none';
+    }
+  }
+
+  await attemptConfirm(2);
 });
 
 // ── Init ─────────────────────────────────────────────────────
