@@ -358,13 +358,18 @@ async function doCheckin() {
     }
     setTimeout(resetUI, 1500);
   } catch (err) {
-    // ✅ すでに入場済み（重複送信・409）の場合は分かりやすいメッセージにして、
-    //    そのままボタン連打で再度409を起こさないよう次のスキャンに進ませる
-    const isDuplicate = err?.code==='23505' || err?.status===409
-      || /duplicate|conflict|already/i.test(err?.message||'');
+    const msg = err?.message || '';
+    // ✅ 409は「すでに入場済み（重複）」だけでなく「APIキー設定不備」でも
+    //    返ってくることがあるため、メッセージ内容で区別する
+    const isDuplicate  = err?.code==='23505' || /duplicate key|already checked/i.test(msg);
+    const isAuthConfig = /api ?key/i.test(msg);
     if (isDuplicate) {
       showToast('すでに入場済みです', 2500);
       setTimeout(resetUI, 800);
+    } else if (isAuthConfig) {
+      showToast('通信設定エラー：ページを再読み込みしてください', 3500);
+      btn.disabled=false; btn.textContent='✓ 受付完了';
+      checkinInFlight=false;
     } else {
       showToast('エラー: もう一度お試しください', 2500);
       btn.disabled=false; btn.textContent='✓ 受付完了';

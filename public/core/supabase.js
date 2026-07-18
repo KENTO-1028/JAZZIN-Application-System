@@ -7,6 +7,11 @@
 const SUPABASE_URL = window.__JAZZIN_SUPABASE_URL__ || 'https://YOUR_PROJECT.supabase.co';
 const SUPABASE_ANON = window.__JAZZIN_SUPABASE_ANON__ || 'YOUR_ANON_KEY';
 
+// ✅ config.js が読み込まれていない・失敗した場合に気づけるようにする
+if (SUPABASE_ANON === 'YOUR_ANON_KEY' || !SUPABASE_ANON) {
+  console.error('[JAZZIN] Supabase anonキーが設定されていません。config.jsの読み込みを確認してください。');
+}
+
 // ── Client (CDN版 supabase-js v2) ──────────────────────────
 export const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON, {
   realtime: { params: { eventsPerSecond: 10 } }
