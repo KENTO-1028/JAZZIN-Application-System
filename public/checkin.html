@@ -14,7 +14,14 @@
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <style>
 body { background:#030810; overflow-x:hidden; }
-.checkin-layout { display:flex; flex-direction:column; min-height:100dvh; }
+.checkin-layout {
+  display:flex; flex-direction:column; min-height:100dvh;
+  max-width:480px; width:100%; margin:0 auto;
+  position:relative; z-index:1;
+}
+@media (min-width:481px) {
+  .checkin-layout { border-left:1px solid var(--border); border-right:1px solid var(--border); }
+}
 
 /* Camera */
 .camera-zone { position:relative; width:100%; background:#000; flex-shrink:0; }
@@ -23,7 +30,7 @@ body { background:#030810; overflow-x:hidden; }
 .scan-overlay { position:absolute; inset:0; pointer-events:none; display:flex; align-items:center; justify-content:center; }
 .scan-frame {
   position:relative;
-  width:200px; height:200px;
+  width:52%; height:52%; max-width:220px; max-height:220px; aspect-ratio:1/1;
   border:1px solid rgba(255,255,255,0.2);
   border-radius:8px;
   box-shadow:0 0 0 9999px rgba(0,4,10,0.6);
@@ -39,12 +46,12 @@ body { background:#030810; overflow-x:hidden; }
 .scan-frame > span::after  { bottom:-1px; right:-1px; border-width:0 2px 2px 0; border-radius:0 0 2px 0; }
 
 .scan-line {
-  position:absolute; left:10px; right:10px; height:1px;
+  position:absolute; left:5%; right:5%; height:1px;
   background:linear-gradient(90deg, transparent, var(--accent-1), transparent);
   animation:scanAnim 2s ease-in-out infinite;
-  top:10px;
+  top:5%;
 }
-@keyframes scanAnim { 0%{top:10px} 50%{top:178px} 100%{top:10px} }
+@keyframes scanAnim { 0%{top:5%} 50%{top:89%} 100%{top:5%} }
 .scan-status {
   position:absolute; bottom:10px; left:0; right:0;
   text-align:center; font-size:0.7rem; font-weight:500;
@@ -211,6 +218,10 @@ let lastScannedAt = 0;
 let pendingRsv   = null;
 let stats        = { checked:0, total:0, cash:0 };
 const RESCAN_COOLDOWN = 1000;
+// ✅ ガードフラグ：ガストカード表示中はスキャンを完全に無視し、
+//    受付完了処理も多重送信できないようにする（409対策）
+let scanLocked      = false;
+let checkinInFlight = false;
 
 function showToast(msg,ms=2000){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),ms);}
 
@@ -272,8 +283,12 @@ function startScanner() {
 }
 
 async function onQRSuccess(text) {
+  // ✅ ガストカード表示中・処理中は新しいスキャンを完全に無視する
+  //    （同じQRがカメラに映り続けていても再トリガーされない）
+  if (scanLocked) return;
   const now=Date.now();
   if (text===lastScanned && now-lastScannedAt<RESCAN_COOLDOWN) return;
+  scanLocked=true;
   lastScanned=text; lastScannedAt=now;
   document.getElementById('scan-status').textContent='読み取り中...';
   try {
@@ -327,7 +342,8 @@ function renderError(result) {
 }
 
 async function doCheckin() {
-  if (!pendingRsv) return;
+  if (!pendingRsv || checkinInFlight) return;
+  checkinInFlight=true;
   const btn=document.getElementById('btn-complete');
   btn.disabled=true; btn.textContent='処理中...';
   try {
@@ -341,11 +357,27 @@ async function doCheckin() {
       card.querySelector('.action-row').innerHTML=`<div class="done-badge">✓ 入場完了</div>`;
     }
     setTimeout(resetUI, 1500);
-  } catch { showToast('エラー: 再スキャンしてください',2500); btn.disabled=false; btn.textContent='✓ 受付完了'; }
+  } catch (err) {
+    // ✅ すでに入場済み（重複送信・409）の場合は分かりやすいメッセージにして、
+    //    そのままボタン連打で再度409を起こさないよう次のスキャンに進ませる
+    const isDuplicate = err?.code==='23505' || err?.status===409
+      || /duplicate|conflict|already/i.test(err?.message||'');
+    if (isDuplicate) {
+      showToast('すでに入場済みです', 2500);
+      setTimeout(resetUI, 800);
+    } else {
+      showToast('エラー: もう一度お試しください', 2500);
+      btn.disabled=false; btn.textContent='✓ 受付完了';
+      checkinInFlight=false;
+    }
+    return;
+  }
+  checkinInFlight=false;
 }
 
 function resetUI() {
   pendingRsv=null;
+  scanLocked=false;
   document.getElementById('guest-display').style.display='none';
   document.getElementById('guest-display').innerHTML='';
   document.getElementById('scan-hint').style.display='flex';
