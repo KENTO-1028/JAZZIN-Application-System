@@ -65,6 +65,18 @@ body { min-height:100dvh; }
 /* Form grid */
 .form-grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:1rem; }
 @media (max-width:520px) { .form-grid-2 { grid-template-columns:1fr; } }
+/* ✅ 「未定」チェックボックス（開催日時・開場時刻共通） */
+.tbd-toggle {
+  display:flex; align-items:center; gap:0.45rem;
+  margin-top:0.4rem; font-size:0.8rem; color:var(--text-secondary);
+  cursor:pointer; user-select:none; -webkit-user-select:none;
+  min-height:28px;
+}
+.tbd-toggle input[type="checkbox"] {
+  width:17px; height:17px; accent-color:var(--accent-1);
+  cursor:pointer; flex-shrink:0;
+}
+.form-input:disabled { opacity:0.4; cursor:not-allowed; }
 
 /* Status selector */
 .status-btns { display:flex; gap:0.5rem; flex-wrap:wrap; }
@@ -198,12 +210,14 @@ body { min-height:100dvh; }
           </div>
           <div class="form-grid-2">
             <div class="form-group">
-              <label class="form-label">開催日時 *</label>
+              <label class="form-label">開催日時</label>
               <input type="datetime-local" class="form-input" id="f-event-at">
+              <label class="tbd-toggle"><input type="checkbox" id="f-event-at-tbd"> 日時未定（後日設定する）</label>
             </div>
             <div class="form-group">
               <label class="form-label">開場時刻</label>
               <input type="datetime-local" class="form-input" id="f-doors-open">
+              <label class="tbd-toggle"><input type="checkbox" id="f-doors-open-tbd"> 時刻未定（後日設定する）</label>
             </div>
           </div>
           <div class="form-group">
@@ -471,8 +485,8 @@ function collectFormData() {
 
   return {
     title:         $('f-title')?.value.trim() || '',
-    event_at:      $('f-event-at')?.value || null,
-    doors_open_at: $('f-doors-open')?.value || null,
+    event_at:      $('f-event-at-tbd')?.checked   ? null : ($('f-event-at')?.value || null),
+    doors_open_at: $('f-doors-open-tbd')?.checked ? null : ($('f-doors-open')?.value || null),
     description:   $('f-description')?.value.trim() || null,
     hero_image_url:$('f-hero-image')?.value.trim() || null,
     // ✅ hero_crop_* はDBカラムが存在しないため除外（400エラーの原因だったため削除）
@@ -510,6 +524,8 @@ function populateForm(data) {
   set('f-title',        data.title ?? '');
   set('f-event-at',     data.event_at ? toLocalDatetime(data.event_at) : '');
   set('f-doors-open',   data.doors_open_at ? toLocalDatetime(data.doors_open_at) : '');
+  if ($('f-event-at-tbd'))    $('f-event-at-tbd').checked    = !data.event_at;
+  if ($('f-doors-open-tbd'))  $('f-doors-open-tbd').checked  = !data.doors_open_at;
   set('f-description',  data.description ?? '');
   set('f-hero-image',   data.hero_image_url || '');
 
@@ -561,6 +577,19 @@ function toLocalDatetime(iso) {
   const pad = n => String(n).padStart(2,'0');
   // ✅ ローカルタイムゾーンの各コンポーネントを使用（UTCではない）
   return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+// ✅「未定」チェックボックス連動：チェック時は日時入力を無効化＆クリアする
+function setupTbdToggle(checkboxId, inputId) {
+  const cb = $(checkboxId);
+  const input = $(inputId);
+  if (!cb || !input) return;
+  const apply = () => {
+    input.disabled = cb.checked;
+    if (cb.checked) input.value = '';
+  };
+  cb.addEventListener('change', () => { apply(); markDirty(); });
+  apply();
 }
 
 // ✅ datetime-local の値（ローカル時刻文字列＝JST）→ ISOString（UTC）に変換
@@ -758,6 +787,10 @@ async function init() {
   // Attach change listeners to all static inputs
   document.querySelectorAll('#edit-screen .form-input, #edit-screen textarea')
     .forEach(el => el.addEventListener('input', markDirty));
+
+  // ✅「未定」チェックボックス：チェック時は入力欄を無効化し値をクリアする
+  setupTbdToggle('f-event-at-tbd',   'f-event-at');
+  setupTbdToggle('f-doors-open-tbd', 'f-doors-open');
 
   // Status buttons
   document.querySelectorAll('.status-btn').forEach(btn => {

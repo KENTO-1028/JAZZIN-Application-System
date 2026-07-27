@@ -13,17 +13,37 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <style>
 body { min-height:100dvh; }
-.hero-img { width:100%; max-height:360px; object-fit:cover; display:block; }
+/* ✅ 固定max-height(360px)だと、狭い画面では相対的に大きすぎ／広い画面では
+   相対的に小さすぎるバランスになりやすい。aspect-ratio + clamp で
+   画面幅に応じて自然な比率にスケールするようにする。 */
+.hero-img {
+  width:100%;
+  aspect-ratio: 16 / 9;
+  max-height: clamp(200px, 42vw, 420px);
+  object-fit:cover; display:block;
+}
 .hero-placeholder {
-  width:100%; height:220px;
+  width:100%;
+  aspect-ratio: 16 / 9;
+  max-height: clamp(180px, 32vw, 300px);
   background:#000d18;
   display:flex; align-items:center; justify-content:center;
   border-bottom:1px solid var(--border);
 }
-.event-meta-row { display:grid; grid-template-columns:repeat(auto-fill,minmax(120px,1fr)); gap:0.75rem 1.5rem; margin:1.2rem 0; }
-.event-meta-item { display:flex; flex-direction:column; gap:3px; }
-.event-meta-label { font-size:0.65rem; letter-spacing:0.15em; color:var(--text-secondary); font-family:var(--font-body); font-weight:600; }
-.event-meta-value { font-size:0.9rem; color:var(--text-primary); }
+/* ✅ 各項目の最小幅を確保しつつ、狭い画面では常に2列以上を確保して
+   窮屈に見えないよう gap と行間を広げた。 */
+.event-meta-row {
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(min(150px,100%),1fr));
+  gap:1rem 1.5rem;
+  margin:1.35rem 0;
+}
+.event-meta-item { display:flex; flex-direction:column; gap:5px; }
+.event-meta-label { font-size:0.66rem; letter-spacing:0.14em; color:var(--text-secondary); font-family:var(--font-body); font-weight:600; }
+.event-meta-value { font-size:clamp(0.88rem, 2.4vw, 0.95rem); color:var(--text-primary); line-height:1.5; }
+@media (max-width:389px) {
+  .event-meta-row { grid-template-columns:repeat(2,1fr); gap:0.9rem 1rem; }
+}
 .section { margin:2rem 0; }
 .section-title {
   font-family:var(--font-body); font-size:0.7rem; font-weight:600; letter-spacing:0.1em; text-transform:uppercase; color:var(--text-tertiary);
@@ -359,11 +379,10 @@ function renderPage(ev, seatData, meta) {
           <span class="event-meta-label">DATE & TIME</span>
           <span class="event-meta-value">${formatDate(ev.event_at)}</span>
         </div>
-        ${ev.doors_open_at ? `
         <div class="event-meta-item">
           <span class="event-meta-label">OPEN</span>
-          <span class="event-meta-value">${new Date(ev.doors_open_at).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'})}</span>
-        </div>` : ''}
+          <span class="event-meta-value">${ev.doors_open_at ? new Date(ev.doors_open_at).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'}) : '未定'}</span>
+        </div>
         <div class="event-meta-item">
           <span class="event-meta-label">VENUE</span>
           <span class="event-meta-value">${ev.venue_name}</span>

@@ -69,7 +69,9 @@
   --r:    4px;
   --r-lg: 8px;
   --transition: 110ms ease;
-  --px:   1.5rem;
+  /* ✅ 固定 1.5rem → 画面幅に応じて滑らかに変化するfluid値に変更。
+     ブレークポイントの境目で急に余白が変わる「詰まって見える」問題を解消。 */
+  --px:   clamp(1.125rem, 4.2vw, 1.75rem);
   --header-h: 52px;
   --max-w: 960px;
 
@@ -107,13 +109,18 @@ body {
   overflow-x: hidden;
 }
 
-/* ── Ambient blobs — static, near invisible ── */
+/* ── Ambient blobs — static, near invisible ──
+   ✅ 重さ対策: filter:blur(180px) は特にSafari(iOS含む)で
+   position:fixed 要素に対して継続的に再計算コストがかかり、
+   スクロール時のカクつき・全体的な重さの主因だった。
+   blur()フィルターを使わず radial-gradient で擬似的にぼかすことで
+   見た目はほひ同じまま描画コストをほぼゼロにする。 */
 .aurora-wrap { position:fixed; inset:0; z-index:0; overflow:hidden; pointer-events:none; }
-.aurora-blob { position:absolute; border-radius:50%; filter:blur(180px); opacity:0.04; }
-.aurora-blob:nth-child(1) { width:60vw; height:60vw; background:#0055a0; top:-20%; left:-10%; }
-.aurora-blob:nth-child(2) { width:50vw; height:50vw; background:#006090; bottom:-15%; right:-8%; }
-.aurora-blob:nth-child(3) { width:40vw; height:40vw; background:#004060; top:45%; left:35%; }
-@media (max-width:768px) { .aurora-blob { opacity:0.025; } }
+.aurora-blob { position:absolute; border-radius:50%; opacity:0.09; background:radial-gradient(circle, var(--blob-color) 0%, transparent 68%); }
+.aurora-blob:nth-child(1) { width:60vw; height:60vw; top:-20%; left:-10%; --blob-color:#0055a0; }
+.aurora-blob:nth-child(2) { width:50vw; height:50vw; bottom:-15%; right:-8%; --blob-color:#006090; }
+.aurora-blob:nth-child(3) { width:40vw; height:40vw; top:45%; left:35%; --blob-color:#004060; }
+@media (max-width:768px) { .aurora-blob { opacity:0.06; } }
 @media (prefers-reduced-motion:reduce) {
   *,*::before,*::after { animation-duration:.01ms !important; transition-duration:.01ms !important; }
 }
@@ -394,7 +401,7 @@ input[type="date"].form-input { color-scheme:dark; font-size:16px; }
    xl  ≥ 1200  Desktop
 ──────────────────────────────────────────── */
 @media (max-width:389px) {
-  :root { --px:1rem; --seat-sz:26px; --seat-gap:3px; --r-lg:6px; --header-h:48px; }
+  :root { --seat-sz:26px; --seat-gap:3px; --r-lg:6px; --header-h:48px; }
   .events-grid { grid-template-columns:1fr; }
   .logo img { height:21px; }
 }
@@ -406,13 +413,13 @@ input[type="date"].form-input { color-scheme:dark; font-size:16px; }
   .header-inner { gap:.4rem; }
 }
 @media (min-width:768px) and (max-width:1023px) {
-  :root { --px:2rem; --max-w:740px; --seat-sz:34px; }
+  :root { --max-w:740px; --seat-sz:34px; }
   .events-grid { grid-template-columns:repeat(2,1fr); }
   .page { padding:2rem 0 6rem; }
   .grid-3 { grid-template-columns:repeat(2,1fr); }
 }
 @media (min-width:1024px) and (max-width:1199px) {
-  :root { --max-w:920px; --px:2rem; }
+  :root { --max-w:920px; }
   .events-grid { grid-template-columns:repeat(3,1fr); }
 }
 @media (min-width:1200px) {
@@ -420,8 +427,20 @@ input[type="date"].form-input { color-scheme:dark; font-size:16px; }
   .events-grid { grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); }
 }
 @media (min-width:1440px) { :root { --max-w:1160px; } }
-@media (min-width:768px) and (max-width:1023px) and (orientation:landscape) { :root { --px:2.5rem; } }
 @media (any-pointer:coarse) { .btn { min-height:44px; } .form-input { min-height:44px; } }
+
+/* ✅ 横向き(landscape)でかつ画面が低いデバイス（スマホを横にした時など）向け。
+   縦幅が狭いと固定ヘッダーや余白が画面を圧迫しがちなので、その場合だけ詰める。 */
+@media (max-height:480px) and (orientation:landscape) {
+  :root { --header-h:44px; }
+  .page { padding-top:1rem; padding-bottom:2.5rem; }
+}
+
+/* ✅ 折りたたみ・超小型端末（幅320px前後の古いiPhone SE/一部Android）でも
+   横スクロールや文字潰れが起きないよう、最下限だけ明示的に確保。 */
+@media (max-width:340px) {
+  :root { --px:0.9rem; --seat-sz:24px; --seat-gap:2px; }
+}
 
 /* ── Scrollbar ── */
 ::-webkit-scrollbar { width:4px; height:4px; }

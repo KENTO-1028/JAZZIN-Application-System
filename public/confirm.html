@@ -351,18 +351,46 @@ function renderQR(token) {
 
 document.getElementById('btn-save').addEventListener('click', async () => {
   const btn = document.getElementById('btn-save');
+  const originalLabel = btn.textContent;
   btn.disabled = true; btn.textContent = '保存中...';
   try {
     const canvas = await html2canvas(document.getElementById('capture-target'), {
       backgroundColor:'#000d16', scale:2, logging:false,
     });
-    const a = document.createElement('a');
-    a.download = `jazzin-${RSV_CODE||'ticket'}.png`;
-    a.href = canvas.toDataURL('image/png');
-    a.click();
-    showToast('画像を保存しました');
-  } catch { showToast('保存に失敗しました'); }
-  btn.disabled = false; btn.textContent = '📥 画像として保存';
+
+    const fileName = `jazzin-${RSV_CODE || 'ticket'}.png`;
+    const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+
+    // ✅ iOS/Android Safari 等: <a download> はカメラロールへの保存を起動できないため、
+    //    Web Share API（ファイル共有）が使える場合はそちらを優先する。
+    //    共有シートから「画像を保存」を選ぶと直接カメラロールに保存される。
+    const file = blob ? new File([blob], fileName, { type: 'image/png' }) : null;
+    const canUseShare = file && navigator.canShare && navigator.canShare({ files: [file] });
+
+    if (canUseShare) {
+      try {
+        await navigator.share({ files: [file], title: 'JAZZIN チケット' });
+        showToast('共有シートから保存できます');
+      } catch (shareErr) {
+        // ユーザーが共有をキャンセルした場合は何もしない
+        if (shareErr?.name !== 'AbortError') {
+          showToast('保存に失敗しました');
+        }
+      }
+    } else {
+      // デスクトップ等 Web Share 非対応環境ではこれまで通りダウンロードリンクを使用
+      const url = blob ? URL.createObjectURL(blob) : canvas.toDataURL('image/png');
+      const a = document.createElement('a');
+      a.download = fileName;
+      a.href = url;
+      a.click();
+      if (blob) setTimeout(() => URL.revokeObjectURL(url), 4000);
+      showToast('画像を保存しました');
+    }
+  } catch {
+    showToast('保存に失敗しました');
+  }
+  btn.disabled = false; btn.textContent = originalLabel;
 });
 
 loadReservation();
