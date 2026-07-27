@@ -123,7 +123,7 @@ function renderEventCard(ev) {
   card.innerHTML = `
     ${imgHtml}
     <div class="event-card-body">
-      <p class="event-card-meta">${formatDate(ev.event_at)}</p>
+      <p class="event-card-meta">${ev.event_at ? formatDate(ev.event_at) : '日時未定'}</p>
       <p class="event-card-title">${ev.title}</p>
       <p class="event-card-meta">📍 ${ev.venue_name}</p>
       <div class="event-card-footer">

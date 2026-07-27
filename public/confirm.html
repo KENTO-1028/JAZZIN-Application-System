@@ -228,7 +228,7 @@ async function sendConfirmEmail({ reservationId, toEmail, toName, eventTitle, ev
           guest_name:       toName,
           reservation_code: reservationCode,
           event_title:      eventTitle,
-          event_at:         formatDate(eventAt),
+          event_at:         eventAt ? formatDate(eventAt) : '日時未定（決まり次第ご案内します）',
           venue_name:       venueName,
           seats:            seats,
           num_seats:        String(numSeats),
@@ -279,7 +279,7 @@ async function loadReservation() {
     document.getElementById('rsv-details').innerHTML = `
       ${ev ? `
       <div class="confirm-row"><span class="confirm-row-label">イベント</span><span class="confirm-row-value">${ev.title}</span></div>
-      <div class="confirm-row"><span class="confirm-row-label">日時</span><span class="confirm-row-value">${formatDate(ev.event_at)}</span></div>
+      <div class="confirm-row"><span class="confirm-row-label">日時</span><span class="confirm-row-value">${ev.event_at ? formatDate(ev.event_at) : '日時未定（決まり次第ご案内します）'}</span></div>
       <div class="confirm-row"><span class="confirm-row-label">会場</span><span class="confirm-row-value">${ev.venue_name}</span></div>` : ''}
       <div class="confirm-row"><span class="confirm-row-label">お名前</span><span class="confirm-row-value">${rsv.guest_name}</span></div>
       <div class="confirm-row rsv-row"><span class="confirm-row-label">予約番号</span><span class="confirm-row-value" id="rsv-code">${rsv.reservation_code}</span></div>`;

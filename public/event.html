@@ -377,7 +377,7 @@ function renderPage(ev, seatData, meta) {
       <div class="event-meta-row">
         <div class="event-meta-item">
           <span class="event-meta-label">DATE & TIME</span>
-          <span class="event-meta-value">${formatDate(ev.event_at)}</span>
+          <span class="event-meta-value">${ev.event_at ? formatDate(ev.event_at) : '日時未定'}</span>
         </div>
         <div class="event-meta-item">
           <span class="event-meta-label">OPEN</span>
