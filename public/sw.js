@@ -5,7 +5,7 @@
 //    これまでは一度キャッシュされたJS/CSSは「新しいSWがインストールされるまで」
 //    ずっと古いまま使われ続けてしまい、デプロイしても一部の端末だけ
 //    古いコード（＝古いAPIキー設定など）で動き続ける不具合の原因になっていた。
-const CACHE_NAME = 'jazzin-v6';
+const CACHE_NAME = 'jazzin-v7';
 
 const PRECACHE = [
   '/ui/style.css',
