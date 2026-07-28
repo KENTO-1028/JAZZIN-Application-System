@@ -219,7 +219,14 @@ async function sendConfirmEmail({ reservationId, toEmail, toName, eventTitle, ev
   try {
     const res = await fetch(EDGE_FUNCTION_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        // ✅ 追加：Supabaseのゲートウェイ(Kong)は apikey ヘッダーが無いリクエストを
+        //    Edge Functionに到達する前に拒否してしまう（"No API key found in request"）。
+        //    supabase-js経由の呼び出しは自動付与されるが、生のfetch()なので手動で付与する。
+        'apikey':        window.__JAZZIN_SUPABASE_ANON__,
+        'Authorization': `Bearer ${window.__JAZZIN_SUPABASE_ANON__}`,
+      },
       body: JSON.stringify({
         reservation_id: reservationId,   // ✅ 追加：サーバー側で重複送信を判定するために必須
         to_email: toEmail,
