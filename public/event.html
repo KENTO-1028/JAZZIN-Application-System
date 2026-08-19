@@ -277,6 +277,33 @@ body { min-height:100dvh; }
         <input type="tel" class="form-input" id="f-phone" placeholder="090-xxxx-xxxx" autocomplete="tel">
       </div>
       <div class="form-group">
+        <label class="form-label">性別 *</label>
+        <div style="display:flex;gap:1.25rem;flex-wrap:wrap;padding:0.4rem 0.1rem">
+          <label style="display:flex;align-items:center;gap:0.4rem;font-size:0.85rem;color:var(--text-secondary);cursor:pointer">
+            <input type="radio" name="f-gender" value="男" class="f-gender-radio"> 男
+          </label>
+          <label style="display:flex;align-items:center;gap:0.4rem;font-size:0.85rem;color:var(--text-secondary);cursor:pointer">
+            <input type="radio" name="f-gender" value="女" class="f-gender-radio"> 女
+          </label>
+          <label style="display:flex;align-items:center;gap:0.4rem;font-size:0.85rem;color:var(--text-secondary);cursor:pointer">
+            <input type="radio" name="f-gender" value="どちらでもない" class="f-gender-radio"> どちらでもない
+          </label>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">年齢 *</label>
+        <select class="form-input" id="f-age-range">
+          <option value="">選択してください</option>
+          <option value="〜10代">〜10代</option>
+          <option value="20代">20代</option>
+          <option value="30代">30代</option>
+          <option value="40代">40代</option>
+          <option value="50代">50代</option>
+          <option value="60代">60代</option>
+          <option value="それ以降">それ以降</option>
+        </select>
+      </div>
+      <div class="form-group">
         <label class="form-label">備考（任意）</label>
         <input type="text" class="form-input" id="f-notes" placeholder="事前に伝えておきたいことなどあれば">
       </div>
@@ -661,6 +688,9 @@ document.addEventListener('click', e => {
 ['f-last-name', 'f-first-name', 'f-last-kana', 'f-first-kana', 'f-email'].forEach(id => {
   document.addEventListener('input', e => { if (e.target.id === id) validateForm(); });
 });
+document.addEventListener('change', e => {
+  if (e.target.id === 'f-age-range' || e.target.classList?.contains('f-gender-radio')) validateForm();
+});
 
 function validateForm() {
   const lastName  = document.getElementById('f-last-name')?.value.trim();
@@ -668,8 +698,10 @@ function validateForm() {
   const lastKana  = document.getElementById('f-last-kana')?.value.trim();
   const firstKana = document.getElementById('f-first-kana')?.value.trim();
   const email     = document.getElementById('f-email')?.value.trim();
+  const gender    = document.querySelector('.f-gender-radio:checked')?.value;
+  const ageRange  = document.getElementById('f-age-range')?.value;
   const btn       = document.getElementById('btn-confirm');
-  if (btn) btn.disabled = !(lastName && firstName && lastKana && firstKana && email && email.includes('@'));
+  if (btn) btn.disabled = !(lastName && firstName && lastKana && firstKana && email && email.includes('@') && gender && ageRange);
 }
 
 document.addEventListener('click', async e => {
@@ -685,15 +717,19 @@ document.addEventListener('click', async e => {
   const fullName   = `${lastName} ${firstName}`;
   const fullKana   = `${lastKana} ${firstKana}`;
   const notesRaw   = document.getElementById('f-notes').value.trim();
-  const notesWithKana = fullKana ? `【フリガナ】${fullKana}${notesRaw ? '\n' + notesRaw : ''}` : notesRaw;
+  const gender     = document.querySelector('.f-gender-radio:checked')?.value || null;
+  const ageRange   = document.getElementById('f-age-range').value || null;
 
   const payload = {
-    eventId:    EVENT_ID,
-    seatIds:    [...selectedIds],
-    guestName:  fullName,
-    guestEmail: document.getElementById('f-email').value.trim(),
-    guestPhone: document.getElementById('f-phone').value.trim(),
-    notes:      notesWithKana,
+    eventId:       EVENT_ID,
+    seatIds:       [...selectedIds],
+    guestName:     fullName,
+    guestEmail:    document.getElementById('f-email').value.trim(),
+    guestPhone:    document.getElementById('f-phone').value.trim(),
+    notes:         notesRaw,
+    guestNameKana: fullKana,
+    guestGender:   gender,
+    guestAgeRange: ageRange,
   };
 
   // ネットワーク由来のエラー（DNS瞬断・回線切替など）だけ自動リトライする。

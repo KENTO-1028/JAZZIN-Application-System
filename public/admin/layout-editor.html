@@ -270,11 +270,15 @@ let currentEventId = null;
 let currentTool    = 'seat';
 let stagePosition  = 'top';
 let rows = 6, cols = 6;
-let grid = []; // grid[row][col] = { type: 'seat'|'aisle'|'entrance'|'stage'|'wall', label: '' }
+let grid = []; // grid[row][col] = { type: 'seat'|'aisle'|'entrance'|'stage'|'wall', label: '', locked: false }
 let isDragging = false;
 let dragType   = null;
 let autosaveTimer = null;
 let hasUnsavedChanges = false;
+// ✅ 予約が入っている座席の位置（"row,col"）。この座席は編集・削除・移動を一切禁止する
+let lockedSeats = new Set();
+// ✅ DBから読み込んだ座席の生データ（再生成・リセット時のロック復元に使う）
+let currentSeatsCache = [];
 
 // ── Display settings ─────────────────────────────────────────
 let displaySettings = {
@@ -486,9 +490,27 @@ async function openEditor(ev) {
   // 既存の座席データを読み込む
   const { data: seats } = await supabase
     .from('seats')
-    .select('row_num, col_num, label')
+    .select('id, row_num, col_num, label')
     .eq('event_id', ev.id)
     .order('row_num').order('col_num');
+
+  // ✅ 予約が1件でも紐づいている座席を検出（＝編集・削除・移動を禁止する座席）
+  lockedSeats = new Set();
+  if (seats && seats.length > 0) {
+    const { data: rsvSeats, error: rsvSeatsErr } = await supabase
+      .from('reservation_seats')
+      .select('seat_id')
+      .in('seat_id', seats.map(s => s.id));
+    if (rsvSeatsErr) {
+      console.error('[JAZZIN] reservation_seats fetch error:', rsvSeatsErr);
+      showToast('予約状況の確認に失敗しました。安全のため編集を中止してください');
+    }
+    const reservedIds = new Set((rsvSeats || []).map(r => r.seat_id));
+    seats.forEach(s => {
+      if (reservedIds.has(s.id)) lockedSeats.add(`${s.row_num},${s.col_num}`);
+    });
+  }
+  currentSeatsCache = seats || [];
 
   // layout_metaを読み込む
   const { data: evData } = await supabase
@@ -512,6 +534,9 @@ async function openEditor(ev) {
       updateStagePosUI();
       if (draft.displaySettings) populateDisplayControls(draft.displaySettings);
       gridFromArray(draft.grid, rows, cols);
+      // ✅ 下書きが古く、その後に新しい予約が入っている可能性があるため、
+      //    現在ロックすべき座席を必ず強制的に復元してから編集を始める
+      reapplyLockedSeats(seats);
       renderGrid();
       updateStats();
       setUnsaved(true);
@@ -555,6 +580,7 @@ async function openEditor(ev) {
       else if (aisles.has(key))   grid[r][c].type = 'aisle';
       else if (seatKeys.has(key)) { grid[r][c].type = 'seat'; grid[r][c].label = seatLabels[key] || ''; }
       else grid[r][c].type = 'aisle';
+      grid[r][c].locked = lockedSeats.has(key);
     }
   }
 
@@ -564,6 +590,30 @@ async function openEditor(ev) {
   updateDraftIndicator('');
 }
 
+// ✅ 下書き復元などの後で、予約済み座席を必ず正しい位置・ラベルに強制的に戻す
+//    （下書きが古い場合、その間に新しく入った予約の座席が反映されていない可能性があるため）
+function reapplyLockedSeats(seats) {
+  if (!seats || !seats.length) return;
+  const seatLabels = {};
+  seats.forEach(s => { seatLabels[`${s.row_num},${s.col_num}`] = s.label; });
+
+  lockedSeats.forEach(key => {
+    const [r, c] = key.split(',').map(Number);
+    // ロック座席がグリッド範囲外なら、範囲を広げて必ず含める
+    if (r > rows) rows = r;
+    if (c > cols) cols = c;
+    for (let i = 1; i <= rows; i++) {
+      grid[i] = grid[i] || [];
+      for (let j = 1; j <= cols; j++) {
+        if (!grid[i][j]) grid[i][j] = { type: 'aisle', label: '', locked: false };
+      }
+    }
+    grid[r][c] = { type: 'seat', label: seatLabels[key] || '', locked: true };
+  });
+  document.getElementById('rows-input').value = rows;
+  document.getElementById('cols-input').value = cols;
+}
+
 // ── Grid init ────────────────────────────────────────────────
 function initGrid(r, c) {
   rows = r; cols = c;
@@ -571,7 +621,7 @@ function initGrid(r, c) {
   for (let i = 0; i <= r; i++) {
     grid[i] = [];
     for (let j = 0; j <= c; j++) {
-      grid[i][j] = { type: 'seat', label: '' };
+      grid[i][j] = { type: 'seat', label: '', locked: false };
     }
   }
 }
@@ -584,6 +634,9 @@ function assignLabels() {
     for (let c = 1; c <= cols; c++) {
       if (grid[r][c].type === 'seat') {
         colSeatIdx++;
+        // ✅ 予約済み座席のラベルは、周囲の席の増減があっても変更しない
+        //    （番号がズレて「A-3」が別の席のラベルになる、といった混乱を防ぐ）
+        if (grid[r][c].locked) continue;
         const letter = r <= 26 ? rowLetters[r-1] : `R${r}`;
         grid[r][c].label = `${letter}-${colSeatIdx}`;
       }
@@ -604,6 +657,13 @@ function renderGrid() {
       cell.dataset.row = r;
       cell.dataset.col = c;
       applyCell(cell, grid[r][c].type, grid[r][c].label);
+      if (grid[r][c].locked) {
+        cell.classList.add('locked-cell');
+        cell.title = '予約済み座席（編集不可）';
+        cell.style.outline = '2px solid var(--c-red, #ff6b6b)';
+        cell.style.cursor = 'not-allowed';
+        cell.style.opacity = '0.85';
+      }
 
       cell.addEventListener('mousedown', e => {
         isDragging = true;
@@ -653,7 +713,17 @@ function applyCell(el, type, label) {
   el.textContent = type === 'seat' ? (label || '？') : (labels[type] || '');
 }
 
+let lockedToastAt = 0;
 function paintCell(r, c) {
+  if (grid[r]?.[c]?.locked) {
+    // 連打・ドラッグ中に何度もトーストが出ないよう間引く
+    const now = Date.now();
+    if (now - lockedToastAt > 1200) {
+      lockedToastAt = now;
+      showToast(`この座席（${grid[r][c].label || `${r},${c}`}）には既に予約が入っているため、編集できません。`, 2500);
+    }
+    return;
+  }
   grid[r][c].type = currentTool;
   if (currentTool !== 'seat') grid[r][c].label = '';
   const el = document.querySelector(`.editor-cell[data-row="${r}"][data-col="${c}"]`);
@@ -720,20 +790,43 @@ function updateStagePosUI() {
 document.getElementById('btn-resize').addEventListener('click', () => {
   const r = parseInt(document.getElementById('rows-input').value) || 6;
   const c = parseInt(document.getElementById('cols-input').value) || 6;
-  if (!confirm(`グリッドを ${r}×${c} に再生成します。現在の配置はリセットされます。`)) return;
+
+  // ✅ 予約済み座席がグリッド範囲外にはみ出す再生成は禁止する
+  const outOfBounds = [...lockedSeats].filter(key => {
+    const [lr, lc] = key.split(',').map(Number);
+    return lr > r || lc > c;
+  });
+  if (outOfBounds.length > 0) {
+    alert(`予約済みの座席が ${outOfBounds.length} 席、指定した行数・列数の範囲外になります。\nこれらの座席は削除できないため、行数・列数をもっと大きくしてください。`);
+    return;
+  }
+
+  const hasLocked = lockedSeats.size > 0;
+  if (!confirm(hasLocked
+    ? `グリッドを ${r}×${c} に再生成します。予約が入っていない座席の配置はリセットされますが、予約済みの座席（${lockedSeats.size}席）はそのまま維持されます。`
+    : `グリッドを ${r}×${c} に再生成します。現在の配置はリセットされます。`)) return;
+
   initGrid(r, c);
   // デフォルト全席
   for (let i = 1; i <= r; i++)
     for (let j = 1; j <= c; j++)
-      grid[i][j] = { type: 'seat', label: '' };
+      grid[i][j] = { type: 'seat', label: '', locked: false };
+
+  // ✅ 予約済み座席は再生成後も必ず元の位置・ラベルのまま復元する
+  reapplyLockedSeats(currentSeatsCache);
   renderGrid();
+  scheduleAutosave();
 });
 
 document.getElementById('btn-reset').addEventListener('click', () => {
-  if (!confirm('レイアウトをリセットしますか？')) return;
+  const hasLocked = lockedSeats.size > 0;
+  if (!confirm(hasLocked
+    ? `レイアウトをリセットしますか？予約済みの座席（${lockedSeats.size}席）は維持されます。`
+    : 'レイアウトをリセットしますか？')) return;
   for (let i = 1; i <= rows; i++)
     for (let j = 1; j <= cols; j++)
-      grid[i][j] = { type: 'seat', label: '' };
+      grid[i][j] = { type: 'seat', label: '', locked: false };
+  reapplyLockedSeats(currentSeatsCache);
   renderGrid();
 });
 
@@ -781,57 +874,50 @@ document.getElementById('btn-save').addEventListener('click', async () => {
       }
     }
 
-    // ── layout_meta を events テーブルに保存 ─────────────────
+    // ── layout_meta ＋ seats を1つの安全なRPCでまとめて保存 ─────
+    //    update_seat_layout はDB側で「予約済み座席が壊れていないか」を
+    //    必ず再チェックしてから書き込む（フロントのバグや古い下書きが
+    //    あっても、予約データは絶対に消えない・壊れない）
     const layoutMeta = {
       stage_position:   stagePosition,
       display_settings: { ...displaySettings },
       aisles, entrances, stages, walls, rows, cols
     };
-    const { error: metaErr } = await supabase
-      .from('events')
-      .update({ layout_meta: layoutMeta })
-      .eq('id', currentEventId);
-    if (metaErr) {
-      console.error('[JAZZIN] events update error:', metaErr);
-      throw new Error(`イベント更新失敗 (${metaErr.code}): ${metaErr.message}`);
+
+    const { data: result, error: rpcErr } = await supabase.rpc('update_seat_layout', {
+      p_event_id:    currentEventId,
+      p_layout_meta: layoutMeta,
+      p_seats:       seatCells, // [{row, col, label}, ...]
+    });
+
+    if (rpcErr) {
+      console.error('[JAZZIN] update_seat_layout error:', rpcErr);
+      throw new Error(`保存失敗: ${rpcErr.message}`);
     }
 
-    // ── seats: 削除→挿入 ─────────────────────────────────────
-    const { error: delErr } = await supabase
-      .from('seats')
-      .delete()
-      .eq('event_id', currentEventId);
-    if (delErr) {
-      console.error('[JAZZIN] seats delete error:', delErr);
-      throw new Error(`座席削除失敗 (${delErr.code}): ${delErr.message}`);
-    }
-
-    if (seatCells.length > 0) {
-      // 大量データは100件ずつ分割してinsert
-      const CHUNK = 100;
-      for (let i = 0; i < seatCells.length; i += CHUNK) {
-        const chunk = seatCells.slice(i, i + CHUNK).map(s => ({
-          event_id: currentEventId,
-          row_num:  s.row,
-          col_num:  s.col,
-          label:    s.label,
-          status:   'available',
-        }));
-        const { error: insErr } = await supabase.from('seats').insert(chunk);
-        if (insErr) {
-          console.error('[JAZZIN] seats insert error:', insErr);
-          throw new Error(`座席登録失敗 (${insErr.code}): ${insErr.message}`);
-        }
+    if (!result?.success) {
+      if (result?.error === 'protected_seats_modified') {
+        const list = (result.conflicts || [])
+          .map(c => `・${c.label}（${c.row}行${c.col}列）`).join('\n');
+        alert(
+          `保存できませんでした。\n\n` +
+          `以下の座席にはすでに予約が入っているため、削除・移動・改名できません。\n\n${list}\n\n` +
+          `画面を再読み込みして最新の状態を確認してください。`
+        );
+        throw new Error('protected_seats_modified');
       }
+      throw new Error(result?.error || '不明なエラー');
     }
 
-    showToast(`✓ ${seatCells.length}席を保存しました`);
+    showToast(`✓ 保存しました（追加${result.inserted} / 変更${result.updated} / 削除${result.deleted} 、予約済み座席は保護されました）`);
     clearDraft(currentEventId);
     setUnsaved(false);
     updateDraftIndicator('');
   } catch (err) {
     console.error('[JAZZIN] save error:', err);
-    showToast('保存に失敗: ' + (err.message || err));
+    if (err.message !== 'protected_seats_modified') {
+      showToast('保存に失敗: ' + (err.message || err));
+    }
   }
 
   btn.disabled = false; btn.textContent = '💾 保存して反映';

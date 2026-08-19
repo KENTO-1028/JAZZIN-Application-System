@@ -186,9 +186,9 @@ textarea.form-input { min-height: 80px; resize: vertical; }
         </select>
       </div>
       <div class="stats-grid" id="stats-grid">
-        <div class="stat-card"><div class="stat-card-label">予約数</div><div class="stat-card-value" id="s-reservations">--</div></div>
-        <div class="stat-card"><div class="stat-card-label">入場済</div><div class="stat-card-value" id="s-checkins" style="color:var(--c-green)">--</div></div>
-        <div class="stat-card"><div class="stat-card-label">未入場</div><div class="stat-card-value" id="s-remaining">--</div></div>
+        <div class="stat-card"><div class="stat-card-label">予約人数</div><div class="stat-card-value" id="s-reservations">--</div></div>
+        <div class="stat-card"><div class="stat-card-label">入場済(人)</div><div class="stat-card-value" id="s-checkins" style="color:var(--c-green)">--</div></div>
+        <div class="stat-card"><div class="stat-card-label">未入場(人)</div><div class="stat-card-value" id="s-remaining">--</div></div>
         <div class="stat-card"><div class="stat-card-label">回収額</div><div class="stat-card-value" id="s-cash" style="color:var(--accent-1)">--</div></div>
       </div>
       <div style="display:flex;gap:0.75rem;margin-bottom:1rem">
@@ -198,7 +198,7 @@ textarea.form-input { min-height: 80px; resize: vertical; }
         <table class="data-table" id="rsv-table">
           <thead>
             <tr>
-              <th>受付番号</th><th>名前</th><th>座席</th><th>人数</th>
+              <th>受付番号</th><th>名前</th><th>性別</th><th>年齢</th><th>座席</th><th>人数</th>
               <th>支払</th><th>チェックイン</th><th>状態</th><th>操作</th>
             </tr>
           </thead>
@@ -401,7 +401,7 @@ async function loadDashboard(ev) {
   currentDashboardEvent = ev;
   const [rsvData, checkinData] = await Promise.all([
     supabase.from('reservations')
-      .select('id, reservation_code, guest_name, num_seats, payment_status, status, reservation_seats(seat:seats(label))')
+      .select('id, reservation_code, guest_name, guest_gender, guest_age_range, num_seats, payment_status, status, reservation_seats(seat:seats(label))')
       .eq('event_id', ev.id)
       .order('created_at'),
     supabase.from('checkins')
@@ -413,14 +413,17 @@ async function loadDashboard(ev) {
   const checkins = new Set((checkinData.data||[]).map(c=>c.reservation_id));
 
   // ✅ 統計はキャンセル済みを除いた「有効な予約」のみで計算する
-  const activeRsvs  = reservations.filter(r => r.status !== 'cancelled');
-  const totalPeople = activeRsvs.reduce((s,r)=>s+r.num_seats,0);
-  const checkedIn   = activeRsvs.filter(r=>checkins.has(r.id)).length;
-  const cashSeats   = activeRsvs.filter(r=>r.payment_status==='paid_cash').reduce((s,r)=>s+r.num_seats,0);
+  const activeRsvs   = reservations.filter(r => r.status !== 'cancelled');
+  const totalPeople  = activeRsvs.reduce((s,r)=>s+r.num_seats,0);
+  // ✅ 「入場した人数」は予約件数ではなく、実際に受付完了した予約のnum_seatsを合算する
+  //    （複数人予約1件を「1人」と数えてしまうバグを修正）
+  const checkedInRsvs   = activeRsvs.filter(r=>checkins.has(r.id));
+  const checkedInPeople = checkedInRsvs.reduce((s,r)=>s+r.num_seats,0);
+  const cashSeats     = activeRsvs.filter(r=>r.payment_status==='paid_cash').reduce((s,r)=>s+r.num_seats,0);
 
   document.getElementById('s-reservations').textContent = totalPeople;
-  document.getElementById('s-checkins').textContent     = checkedIn;
-  document.getElementById('s-remaining').textContent    = activeRsvs.length - checkedIn;
+  document.getElementById('s-checkins').textContent     = checkedInPeople;
+  document.getElementById('s-remaining').textContent    = Math.max(0, totalPeople - checkedInPeople);
   document.getElementById('s-cash').textContent         = formatPrice(cashSeats * (ev.ticket_price||500));
 
   const tbody = document.getElementById('rsv-tbody');
@@ -431,6 +434,8 @@ async function loadDashboard(ev) {
     return `<tr style="${isCancelled ? 'opacity:0.45' : ''}">
       <td style="font-weight:600;color:var(--accent-1)">${r.reservation_code}</td>
       <td>${r.guest_name}</td>
+      <td>${r.guest_gender || '--'}</td>
+      <td>${r.guest_age_range || '--'}</td>
       <td>${seats}</td>
       <td>${r.num_seats}</td>
       <td><span class="badge ${r.payment_status==='paid_cash'?'badge-ok':'badge-sold'}">${r.payment_status==='paid_cash'?'支払済':'未払い'}</span></td>
@@ -471,10 +476,10 @@ async function loadDashboard(ev) {
 }
 
 function exportCSV(ev, reservations, checkins) {
-  const rows = [['受付番号','名前','座席','人数','支払','チェックイン']];
+  const rows = [['受付番号','名前','性別','年齢','座席','人数','支払','チェックイン']];
   reservations.forEach(r => {
     const seats = r.reservation_seats?.map(rs=>rs.seat?.label).join('/') || '';
-    rows.push([r.reservation_code, r.guest_name, seats, r.num_seats, r.payment_status, checkins.has(r.id)?'済':'']);
+    rows.push([r.reservation_code, r.guest_name, r.guest_gender||'', r.guest_age_range||'', seats, r.num_seats, r.payment_status, checkins.has(r.id)?'済':'']);
   });
   const csv = rows.map(r=>r.map(v=>`"${v}"`).join(',')).join('\n');
   const blob = new Blob(['\uFEFF'+csv], {type:'text/csv;charset=utf-8'});

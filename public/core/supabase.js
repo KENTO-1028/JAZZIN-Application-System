@@ -94,16 +94,20 @@ export async function lockSeats(eventId, seatIds) {
 }
 
 export async function confirmReservation({
-  eventId, seatIds, guestName, guestEmail, guestPhone, notes
+  eventId, seatIds, guestName, guestEmail, guestPhone, notes,
+  guestNameKana, guestGender, guestAgeRange
 }) {
   const { data, error } = await supabase.rpc('confirm_reservation', {
-    p_event_id:      eventId,
-    p_seat_ids:      seatIds,
-    p_session_token: SESSION_TOKEN,
-    p_guest_name:    guestName,
-    p_guest_email:   guestEmail,
-    p_guest_phone:   guestPhone || null,
-    p_notes:         notes || null,
+    p_event_id:        eventId,
+    p_seat_ids:        seatIds,
+    p_session_token:   SESSION_TOKEN,
+    p_guest_name:      guestName,
+    p_guest_email:     guestEmail,
+    p_guest_phone:     guestPhone || null,
+    p_notes:           notes || null,
+    p_guest_name_kana: guestNameKana || null,
+    p_guest_gender:    guestGender || null,
+    p_guest_age_range: guestAgeRange || null,
   });
   if (error) throw error;
   return data; // { success, reservation_id, reservation_code, qr_token }

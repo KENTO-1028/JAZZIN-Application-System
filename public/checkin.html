@@ -193,9 +193,9 @@ body { background:#030810; overflow-x:hidden; }
     </div>
 
     <div class="stats-bar">
-      <div class="stat-item"><div class="stat-val" id="stat-checked" style="color:var(--c-green)">0</div><div class="stat-label">入場済</div></div>
-      <div class="stat-item"><div class="stat-val" id="stat-total">0</div><div class="stat-label">予約数</div></div>
-      <div class="stat-item"><div class="stat-val" id="stat-remaining" style="color:var(--accent-1)">0</div><div class="stat-label">未入場</div></div>
+      <div class="stat-item"><div class="stat-val" id="stat-checked" style="color:var(--c-green)">0</div><div class="stat-label">入場済(人)</div></div>
+      <div class="stat-item"><div class="stat-val" id="stat-total">0</div><div class="stat-label">予約人数</div></div>
+      <div class="stat-item"><div class="stat-val" id="stat-remaining" style="color:var(--accent-1)">0</div><div class="stat-label">未入場(人)</div></div>
       <div class="stat-item"><div class="stat-val" id="stat-cash" style="color:var(--c-green)">¥0</div><div class="stat-label">回収額</div></div>
     </div>
   </div>
@@ -249,23 +249,34 @@ async function selectEvent(ev) {
   startScanner();
 }
 
+let reservationSeatsMap = {}; // reservation_id -> num_seats（人数ベース集計用）
+
 async function loadStats() {
   if (!currentEvent) return;
-  const [{ data:total },{ data:checked },{ data:paid },{ data:evData }] = await Promise.all([
-    supabase.from('reservations').select('id,num_seats').eq('event_id',currentEvent.id),
-    supabase.from('checkins').select('reservation_id').eq('event_id',currentEvent.id),
-    supabase.from('reservations').select('num_seats').eq('event_id',currentEvent.id).eq('payment_status','paid_cash'),
+  const [{ data:totalRows },{ data:checkedRows },{ data:paidRows },{ data:evData }] = await Promise.all([
+    // ✅ キャンセル済みは「予約人数」に含めない
+    supabase.from('reservations').select('id,num_seats').eq('event_id',currentEvent.id).neq('status','cancelled'),
+    // ✅ チェックイン済みの予約に紐づく num_seats を合算して「入場済(人)」を出す
+    supabase.from('checkins').select('reservation_id, reservation:reservations(num_seats)').eq('event_id',currentEvent.id),
+    supabase.from('reservations').select('num_seats').eq('event_id',currentEvent.id).eq('payment_status','paid_cash').neq('status','cancelled'),
     supabase.from('events').select('ticket_price').eq('id',currentEvent.id).single(),
   ]);
   const price=evData?.ticket_price||500;
+  reservationSeatsMap = {};
+  (totalRows||[]).forEach(r => { reservationSeatsMap[r.id] = r.num_seats; });
   stats={
-    checked: checked?.length||0,
-    total:   (total||[]).reduce((s,r)=>s+r.num_seats,0),
-    cash:    (paid||[]).reduce((s,r)=>s+r.num_seats,0)*price,
+    checked: (checkedRows||[]).reduce((s,c)=>s+(c.reservation?.num_seats||0),0),
+    total:   (totalRows||[]).reduce((s,r)=>s+r.num_seats,0),
+    cash:    (paidRows||[]).reduce((s,r)=>s+r.num_seats,0)*price,
   };
   updateStatsUI();
   supabase.channel(`checkin-stats-${currentEvent.id}`)
-    .on('postgres_changes',{event:'INSERT',schema:'public',table:'checkins',filter:`event_id=eq.${currentEvent.id}`},()=>{stats.checked++;updateStatsUI();})
+    .on('postgres_changes',{event:'INSERT',schema:'public',table:'checkins',filter:`event_id=eq.${currentEvent.id}`},payload=>{
+      // ✅ 1件のチェックインでも予約人数分（複数人予約）を正しく加算する
+      const n = reservationSeatsMap[payload.new?.reservation_id] ?? 1;
+      stats.checked += n;
+      updateStatsUI();
+    })
     .subscribe();
 }
 
@@ -306,7 +317,7 @@ function renderGuest(rsv) {
   const seats = Array.isArray(rsv.seats) ? rsv.seats.map(s=>s.label).join(' / ') : '--';
   const total = (rsv.ticket_price||500)*rsv.num_seats;
   const kanaMatch = (rsv.notes||'').match(/【フリガナ】([^\n]+)/);
-  const kana = kanaMatch ? kanaMatch[1] : '';
+  const kana = rsv.guest_name_kana || (kanaMatch ? kanaMatch[1] : '');
   document.getElementById('guest-display').innerHTML=`
     <div class="guest-card state-ready">
       <div class="g-name">${rsv.guest_name}</div>
