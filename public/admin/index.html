@@ -616,31 +616,88 @@ function renderEventsList() {
       <button class="btn btn-ghost btn-sm" data-delete="${ev.id}" style="color:var(--c-red);border-color:rgba(255,107,107,0.2)" title="削除">🗑</button>
     </div>`).join('');
 
-  // ✅ 削除ボタン
+  // ✅ 削除ボタン（ワンクリック事故防止のため、イベント名を入力しないと削除できないモーダルを表示）
   el.querySelectorAll('[data-delete]').forEach(btn => {
-    btn.addEventListener('click', async () => {
+    btn.addEventListener('click', () => {
       const ev = allEvents.find(e => e.id === btn.dataset.delete);
       if (!ev) return;
-      if (!confirm(`「${ev.title}」を削除しますか？\n関連する座席・予約データもすべて削除されます。この操作は取り消せません。`)) return;
-      btn.disabled = true; btn.textContent = '削除中...';
-      try {
-        const result = await deleteEvent(ev.id);
-        if (!result?.success) {
-          throw new Error(
-            result?.error === 'unauthorized' ? '権限がありません（管理者としてログインし直してください）' :
-            result?.error === 'not_found'    ? 'イベントが見つかりません（既に削除済みの可能性があります）' :
-            result?.error || '不明なエラー'
-          );
-        }
-        showToast('イベントを削除しました');
-        await loadAllEvents();
-      } catch (err) {
-        showToast('削除失敗: ' + (err.message || 'エラー'));
-        btn.disabled = false; btn.textContent = '🗑';
-      }
+      openDeleteEventModal(ev, btn);
     });
   });
 } // renderEventsList END
+
+async function openDeleteEventModal(ev, triggerBtn) {
+  // 何名分の予約が消えるのか、先に数えて見せる（判断材料）
+  const { count: rsvCount } = await supabase
+    .from('reservations')
+    .select('id', { count: 'exact', head: true })
+    .eq('event_id', ev.id)
+    .neq('status', 'cancelled');
+
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,4,8,0.72);z-index:1000;display:flex;align-items:center;justify-content:center;padding:1rem';
+  overlay.innerHTML = `
+    <div style="background:var(--bg-card,#0c1622);border:1px solid rgba(255,107,107,0.35);border-radius:var(--radius-lg,14px);max-width:460px;width:100%;padding:1.75rem">
+      <p style="font-size:1.05rem;font-weight:700;margin:0 0 0.5rem;color:var(--c-red,#ff6b6b)">⚠ イベントを削除しますか？</p>
+      <p style="font-size:0.85rem;color:var(--text-secondary,#8aa);line-height:1.7;margin:0 0 1rem">
+        「<strong style="color:var(--text-primary,#eee)">${ev.title}</strong>」を削除します。<br>
+        この操作は取り消せません。以下も含めてすべて削除されます：
+      </p>
+      <ul style="font-size:0.82rem;color:var(--text-secondary,#8aa);line-height:1.9;margin:0 0 1.25rem;padding-left:1.2rem">
+        <li>予約データ（<strong style="color:var(--c-red,#ff6b6b)">${rsvCount ?? 0}件</strong>、顧客情報・座席の紐付けを含む）</li>
+        <li>チェックイン履歴</li>
+        <li>座席レイアウト</li>
+      </ul>
+      <div class="form-group" style="margin-bottom:1.1rem">
+        <label class="form-label">確認のため、イベント名「<strong>${ev.title}</strong>」を入力してください</label>
+        <input type="text" class="form-input" id="del-confirm-input" autocomplete="off" placeholder="${ev.title}">
+      </div>
+      <div style="display:flex;gap:0.6rem;justify-content:flex-end">
+        <button class="btn btn-ghost btn-sm" id="del-cancel">キャンセル</button>
+        <button class="btn btn-sm" id="del-confirm" disabled
+          style="background:var(--c-red,#ff6b6b);border-color:var(--c-red,#ff6b6b);color:#1a0505;opacity:0.5;cursor:not-allowed">
+          完全に削除する
+        </button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+
+  const input   = overlay.querySelector('#del-confirm-input');
+  const delBtn  = overlay.querySelector('#del-confirm');
+  const cancel  = () => overlay.remove();
+
+  input.addEventListener('input', () => {
+    const match = input.value === ev.title;
+    delBtn.disabled = !match;
+    delBtn.style.opacity = match ? '1' : '0.5';
+    delBtn.style.cursor  = match ? 'pointer' : 'not-allowed';
+  });
+  overlay.querySelector('#del-cancel').addEventListener('click', cancel);
+  overlay.addEventListener('click', e => { if (e.target === overlay) cancel(); });
+
+  delBtn.addEventListener('click', async () => {
+    if (input.value !== ev.title) return; // 念のため二重チェック
+    delBtn.disabled = true; delBtn.textContent = '削除中...';
+    if (triggerBtn) { triggerBtn.disabled = true; triggerBtn.textContent = '削除中...'; }
+    try {
+      const result = await deleteEvent(ev.id);
+      if (!result?.success) {
+        throw new Error(
+          result?.error === 'unauthorized' ? '権限がありません（管理者としてログインし直してください）' :
+          result?.error === 'not_found'    ? 'イベントが見つかりません（既に削除済みの可能性があります）' :
+          result?.error || '不明なエラー'
+        );
+      }
+      overlay.remove();
+      showToast('イベントを削除しました');
+      await loadAllEvents();
+    } catch (err) {
+      showToast('削除失敗: ' + (err.message || 'エラー'));
+      delBtn.disabled = false; delBtn.textContent = '完全に削除する';
+      if (triggerBtn) { triggerBtn.disabled = false; triggerBtn.textContent = '🗑'; }
+    }
+  });
+}
 
 // ── Event form ───────────────────────────────────────────────
 let editingEventId = null;
