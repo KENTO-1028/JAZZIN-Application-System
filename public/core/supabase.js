@@ -152,6 +152,16 @@ export async function signOut() {
   await supabase.auth.signOut();
 }
 
+// ✅ イベント削除：関連データ（座席・予約・チェックイン・採番カウンター）を
+//    すべて含めて安全にまとめて削除するRPCを呼ぶ。
+//    クライアント側で個別にdeleteを積み重ねる方式は、RLS権限がテーブルごとに
+//    異なるとエラーを出さず一部だけ削除漏れするリスクがあるため廃止した。
+export async function deleteEvent(eventId) {
+  const { data, error } = await supabase.rpc('delete_event', { p_event_id: eventId });
+  if (error) throw error;
+  return data; // { success, error? }
+}
+
 export async function getAdminUser() {
   const { data } = await supabase.auth.getUser();
   return data?.user || null;

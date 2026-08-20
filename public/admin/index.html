@@ -329,7 +329,7 @@ textarea.form-input { min-height: 80px; resize: vertical; }
 <div id="toast"></div>
 
 <script type="module">
-import { supabase, signOut, formatDate, formatPrice, cancelReservation, sendThankYouEmails } from '/core/supabase.js';
+import { supabase, signOut, formatDate, formatPrice, cancelReservation, sendThankYouEmails, deleteEvent } from '/core/supabase.js';
 
 function showToast(msg,ms=2000){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),ms);}
 
@@ -624,20 +624,14 @@ function renderEventsList() {
       if (!confirm(`「${ev.title}」を削除しますか？\n関連する座席・予約データもすべて削除されます。この操作は取り消せません。`)) return;
       btn.disabled = true; btn.textContent = '削除中...';
       try {
-        // 関連データを順番に削除（外部キー制約対応）
-        await supabase.from('checkins').delete().eq('event_id', ev.id);
-        const { data: rsvs } = await supabase.from('reservations').select('id').eq('event_id', ev.id);
-        if (rsvs?.length) {
-          await supabase.from('reservation_seats').delete().in('reservation_id', rsvs.map(r => r.id));
+        const result = await deleteEvent(ev.id);
+        if (!result?.success) {
+          throw new Error(
+            result?.error === 'unauthorized' ? '権限がありません（管理者としてログインし直してください）' :
+            result?.error === 'not_found'    ? 'イベントが見つかりません（既に削除済みの可能性があります）' :
+            result?.error || '不明なエラー'
+          );
         }
-        await supabase.from('reservations').delete().eq('event_id', ev.id);
-        await supabase.from('seats').delete().eq('event_id', ev.id);
-        // ✅ 追加：event_reservation_counters（予約番号採番用カウンター）が
-        //    event_id に ON DELETE制約なしの外部キーで紐づいているため、
-        //    これを消さないと events の削除自体が409エラーで失敗する
-        await supabase.from('event_reservation_counters').delete().eq('event_id', ev.id);
-        const { error } = await supabase.from('events').delete().eq('id', ev.id);
-        if (error) throw error;
         showToast('イベントを削除しました');
         await loadAllEvents();
       } catch (err) {
