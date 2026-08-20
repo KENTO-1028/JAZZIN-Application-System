@@ -632,6 +632,10 @@ function renderEventsList() {
         }
         await supabase.from('reservations').delete().eq('event_id', ev.id);
         await supabase.from('seats').delete().eq('event_id', ev.id);
+        // ✅ 追加：event_reservation_counters（予約番号採番用カウンター）が
+        //    event_id に ON DELETE制約なしの外部キーで紐づいているため、
+        //    これを消さないと events の削除自体が409エラーで失敗する
+        await supabase.from('event_reservation_counters').delete().eq('event_id', ev.id);
         const { error } = await supabase.from('events').delete().eq('id', ev.id);
         if (error) throw error;
         showToast('イベントを削除しました');
