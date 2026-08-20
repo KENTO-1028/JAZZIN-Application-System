@@ -72,6 +72,50 @@ body { min-height:100dvh; }
   display:flex; align-items:center; justify-content:center; flex-shrink:0;
 }
 
+/* ── Seatmap minimap（映画館の座席選択のような現在地インジケータ） ── */
+.seatmap-minimap {
+  position: fixed;
+  top: calc(var(--header-h, 52px) + 10px + var(--sat, env(safe-area-inset-top,0px)));
+  right: max(10px, var(--sar, env(safe-area-inset-right,0px)));
+  z-index: 40;
+  background: rgba(4,10,18,0.82);
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 7px;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.35);
+  display: none;
+  opacity: 0;
+  transition: opacity 180ms ease;
+  cursor: pointer;
+  touch-action: none;
+}
+.seatmap-minimap.visible { display: block; }
+.seatmap-minimap.shown   { opacity: 1; }
+.seatmap-minimap-label {
+  font-family: var(--font-body); font-size: 0.56rem; font-weight:600;
+  letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--text-tertiary); margin-bottom: 4px; text-align:center;
+}
+.seatmap-minimap-stage {
+  height: 3px; border-radius: 2px; margin-bottom: 3px;
+  background: linear-gradient(90deg, transparent, var(--accent-1), transparent);
+  opacity: 0.7;
+}
+.seatmap-minimap-canvas-wrap { position: relative; display:block; line-height:0; }
+.seatmap-minimap canvas { display:block; border-radius: 3px; }
+.minimap-viewport {
+  position: absolute;
+  border: 1.5px solid var(--accent-1);
+  background: rgba(0,212,255,0.14);
+  border-radius: 2px;
+  pointer-events: none;
+  box-shadow: 0 0 6px rgba(0,212,255,0.35);
+}
+@media (max-width:600px) {
+  .seatmap-minimap { padding:6px; }
+}
+
 /* ── Seat map wrapper ── */
 .seatmap-wrap {
   overflow-x: auto;
@@ -226,6 +270,15 @@ body { min-height:100dvh; }
   </div>
 </header>
 <div id="toast"></div>
+
+<div class="seatmap-minimap" id="seatmap-minimap" title="タップで移動">
+  <div class="seatmap-minimap-label">現在地</div>
+  <div class="seatmap-minimap-stage" id="minimap-stage-hint"></div>
+  <div class="seatmap-minimap-canvas-wrap">
+    <canvas id="minimap-canvas"></canvas>
+    <div class="minimap-viewport" id="minimap-viewport"></div>
+  </div>
+</div>
 
 <div id="page-content">
   <div class="hero-placeholder skeleton"></div>
@@ -580,7 +633,173 @@ function renderSeats(seatData, meta) {
   }
 
   console.log(`[JAZZIN] ${seatData.length} seats rendered in ${totalRows}x${totalCols} grid`);
+
+  renderMinimap(seatData, meta, totalRows, totalCols);
+  requestAnimationFrame(updateMinimapViewport);
 }
+
+// ══════════════════════════════════════════════════════════════
+// ✅ Minimap（映画館の座席選択のような「現在地」インジケータ）
+//    - 実際の座席配置を縮小したcanvasを右上に固定表示
+//    - 横スクロール（.seatmap-outer）と縦スクロール（ページ全体）の
+//      両方を合成して「今画面に映っている範囲」の枠を重ねて表示
+//    - タップ/クリックでその位置へジャンプできる
+// ══════════════════════════════════════════════════════════════
+let minimapGridInfo = null; // { totalRows, totalCols, cellPx, canvasW, canvasH }
+
+function renderMinimap(seatData, meta, totalRows, totalCols) {
+  const canvas = document.getElementById('minimap-canvas');
+  const widget = document.getElementById('seatmap-minimap');
+  if (!canvas || !widget) return;
+
+  const aisles    = new Set((meta?.aisles    || []).map(a => `${a.row},${a.col}`));
+  const entrances = new Set((meta?.entrances || []).map(e => `${e.row},${e.col}`));
+  const walls     = new Set((meta?.walls     || []).map(w => `${w.row},${w.col}`));
+  const seatMap   = new Map();
+  seatData.forEach(s => seatMap.set(`${s.row_num},${s.col_num}`, s));
+
+  // ✅ 縮小表示のセルサイズ：列数が多いほど小さく、最大でも見やすい範囲に収める
+  const MAX_W = 96, MAX_H = 96, MIN_CELL = 2, MAX_CELL = 7;
+  const cellPx = Math.max(MIN_CELL, Math.min(MAX_CELL, Math.floor(Math.min(MAX_W / totalCols, MAX_H / totalRows))));
+  const dpr = window.devicePixelRatio || 1;
+  const canvasW = cellPx * totalCols;
+  const canvasH = cellPx * totalRows;
+
+  canvas.style.width  = `${canvasW}px`;
+  canvas.style.height = `${canvasH}px`;
+  canvas.width  = Math.round(canvasW * dpr);
+  canvas.height = Math.round(canvasH * dpr);
+
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, canvasW, canvasH);
+
+  for (let r = 1; r <= totalRows; r++) {
+    for (let c = 1; c <= totalCols; c++) {
+      const key = `${r},${c}`;
+      const s   = seatMap.get(key);
+      const x = (c - 1) * cellPx, y = (r - 1) * cellPx;
+      const pad = cellPx > 3 ? 0.5 : 0;
+      let color;
+      if (s) {
+        const status = selectedIds.has(s.id) ? 'selected' : s.status;
+        color = status === 'selected'   ? 'rgba(0,212,255,0.95)'
+              : status === 'reserved'   ? 'rgba(224,85,85,0.5)'
+              : status === 'checked_in' ? 'rgba(127,255,212,0.5)'
+              : status === 'locked'     ? 'rgba(255,255,255,0.12)'
+              : 'rgba(255,255,255,0.28)'; // available
+      } else if (entrances.has(key)) {
+        color = 'rgba(255,200,0,0.35)';
+      } else if (aisles.has(key) || walls.has(key)) {
+        color = 'transparent';
+      } else {
+        color = 'transparent';
+      }
+      if (color !== 'transparent') {
+        ctx.fillStyle = color;
+        ctx.fillRect(x + pad, y + pad, cellPx - pad * 2, cellPx - pad * 2);
+      }
+    }
+  }
+
+  minimapGridInfo = { totalRows, totalCols, cellPx, canvasW, canvasH };
+
+  // ステージの向きを枠の一辺で示す
+  const stageHint = document.getElementById('minimap-stage-hint');
+  const stagePos  = meta?.stage_position || 'top';
+  if (stageHint) {
+    stageHint.style.display = ['top','bottom'].includes(stagePos) ? 'block' : 'none';
+    stageHint.style.order   = stagePos === 'bottom' ? '2' : '0';
+  }
+  widget.style.flexDirection = 'column';
+}
+
+// ✅ 「今見えている範囲」の枠をミニマップ上に計算して重ねる
+function updateMinimapViewport() {
+  const widget = document.getElementById('seatmap-minimap');
+  const outer  = document.querySelector('.seatmap-outer');
+  const grid   = document.getElementById('seat-grid');
+  const vpEl   = document.getElementById('minimap-viewport');
+  if (!widget || !outer || !grid || !vpEl || !minimapGridInfo) {
+    if (widget) widget.classList.remove('visible', 'shown');
+    return;
+  }
+
+  const { canvasW, canvasH } = minimapGridInfo;
+
+  // 横方向：.seatmap-outer のスクロール位置から算出
+  const scrollW = outer.scrollWidth || 1;
+  const hFracW  = Math.min(1, outer.clientWidth / scrollW);
+  const hFracX  = scrollW > outer.clientWidth ? outer.scrollLeft / (scrollW - outer.clientWidth) : 0;
+
+  // 縦方向：グリッド全体のうち、現在ウィンドウに映っている範囲から算出
+  //         （.seatmap-outer は縦方向にスクロールしないため、ページ全体のスクロールで判定する）
+  const rect = grid.getBoundingClientRect();
+  const winH = window.innerHeight;
+  const visibleTop    = Math.min(Math.max(0, -rect.top), rect.height);
+  const visibleBottom = Math.min(Math.max(0, winH - rect.top), rect.height);
+  const vFracY = rect.height > 0 ? visibleTop / rect.height : 0;
+  const vFracH = rect.height > 0 ? Math.max(0, (visibleBottom - visibleTop) / rect.height) : 1;
+
+  const overflowsH = scrollW > outer.clientWidth + 2;
+  const overflowsV = rect.height > winH + 2;
+
+  // 画面内に収まりきっている（横も縦もはみ出していない）なら不要なので隠す
+  if (!overflowsH && !overflowsV) {
+    widget.classList.remove('shown');
+    setTimeout(() => { if (!widget.classList.contains('shown')) widget.classList.remove('visible'); }, 200);
+    return;
+  }
+  widget.classList.add('visible');
+  requestAnimationFrame(() => widget.classList.add('shown'));
+
+  const left = (overflowsH ? hFracX * (1 - hFracW) : 0) * canvasW;
+  const wpx  = (overflowsH ? hFracW : 1) * canvasW;
+  const top  = vFracY * canvasH;
+  const hpx  = Math.max(4, vFracH * canvasH);
+
+  vpEl.style.left   = `${Math.max(0, left)}px`;
+  vpEl.style.top    = `${Math.max(0, top)}px`;
+  vpEl.style.width  = `${Math.min(canvasW, wpx)}px`;
+  vpEl.style.height = `${Math.min(canvasH, hpx)}px`;
+}
+
+// ✅ ミニマップをタップ/クリックすると、その位置へページ内をジャンプする
+document.getElementById('seatmap-minimap').addEventListener('click', e => {
+  const outer = document.querySelector('.seatmap-outer');
+  const grid  = document.getElementById('seat-grid');
+  const canvasWrap = document.querySelector('.seatmap-minimap-canvas-wrap');
+  if (!outer || !grid || !canvasWrap || !minimapGridInfo) return;
+
+  const wrapRect = canvasWrap.getBoundingClientRect();
+  const fx = Math.min(1, Math.max(0, (e.clientX - wrapRect.left) / wrapRect.width));
+  const fy = Math.min(1, Math.max(0, (e.clientY - wrapRect.top)  / wrapRect.height));
+
+  // 横：seatmap-outer をスクロール
+  const scrollW = outer.scrollWidth;
+  if (scrollW > outer.clientWidth) {
+    const targetLeft = fx * scrollW - outer.clientWidth / 2;
+    outer.scrollTo({ left: Math.max(0, Math.min(scrollW - outer.clientWidth, targetLeft)), behavior: 'smooth' });
+  }
+
+  // 縦：ページ全体をスクロール（グリッドの該当位置が画面中央あたりに来るように）
+  const gridRect = grid.getBoundingClientRect();
+  const targetY = window.scrollY + gridRect.top + fy * gridRect.height - window.innerHeight / 2;
+  window.scrollTo({ top: Math.max(0, targetY), behavior: 'smooth' });
+});
+
+// スクロール・リサイズのたびに現在地の枠を更新（rAFで間引き）
+let minimapUpdateQueued = false;
+function queueMinimapUpdate() {
+  if (minimapUpdateQueued) return;
+  minimapUpdateQueued = true;
+  requestAnimationFrame(() => { minimapUpdateQueued = false; updateMinimapViewport(); });
+}
+window.addEventListener('scroll', queueMinimapUpdate, { passive: true });
+window.addEventListener('resize', queueMinimapUpdate);
+document.addEventListener('scroll', e => {
+  if (e.target.classList?.contains('seatmap-outer')) queueMinimapUpdate();
+}, { passive: true, capture: true });
 
 function patchSeat(updated) {
   const idx = seats.findIndex(s => s.id === updated.id);
@@ -589,6 +808,10 @@ function patchSeat(updated) {
   if (selectedIds.has(updated.id)) return;
   const el = document.querySelector(`.seat[data-id="${updated.id}"]`);
   if (el && !el.dataset.type) el.dataset.status = updated.status;
+  if (layoutMeta) {
+    const totalRows = layoutMeta?.rows || 6, totalCols = layoutMeta?.cols || 6;
+    renderMinimap(seats, layoutMeta, totalRows, totalCols);
+  }
 }
 
 function toggleSeat(seat) {
@@ -603,6 +826,10 @@ function toggleSeat(seat) {
     el.dataset.status = SeatStatus.SELECTED;
   }
   updateBookingPanel();
+  if (layoutMeta) {
+    const totalRows = layoutMeta?.rows || 6, totalCols = layoutMeta?.cols || 6;
+    renderMinimap(seats, layoutMeta, totalRows, totalCols);
+  }
 }
 
 function updateBookingPanel() {
