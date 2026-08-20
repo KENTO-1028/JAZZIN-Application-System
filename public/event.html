@@ -87,9 +87,10 @@ body { min-height:100dvh; }
   display: none;
   opacity: 0;
   transition: opacity 180ms ease;
-  cursor: pointer;
+  cursor: grab;
   touch-action: none;
 }
+.seatmap-minimap:active { cursor: grabbing; }
 .seatmap-minimap.visible { display: block; }
 .seatmap-minimap.shown   { opacity: 1; }
 .seatmap-minimap-label {
@@ -764,29 +765,78 @@ function updateMinimapViewport() {
   vpEl.style.height = `${Math.min(canvasH, hpx)}px`;
 }
 
-// ✅ ミニマップをタップ/クリックすると、その位置へページ内をジャンプする
-document.getElementById('seatmap-minimap').addEventListener('click', e => {
+// ✅ ミニマップの座標(fx,fy: 0〜1)から、本体側のスクロール位置へジャンプする
+function jumpToMinimapPoint(fx, fy, smooth) {
   const outer = document.querySelector('.seatmap-outer');
   const grid  = document.getElementById('seat-grid');
-  const canvasWrap = document.querySelector('.seatmap-minimap-canvas-wrap');
-  if (!outer || !grid || !canvasWrap || !minimapGridInfo) return;
+  if (!outer || !grid || !minimapGridInfo) return;
 
-  const wrapRect = canvasWrap.getBoundingClientRect();
-  const fx = Math.min(1, Math.max(0, (e.clientX - wrapRect.left) / wrapRect.width));
-  const fy = Math.min(1, Math.max(0, (e.clientY - wrapRect.top)  / wrapRect.height));
+  const behavior = smooth ? 'smooth' : 'instant';
 
   // 横：seatmap-outer をスクロール
   const scrollW = outer.scrollWidth;
   if (scrollW > outer.clientWidth) {
     const targetLeft = fx * scrollW - outer.clientWidth / 2;
-    outer.scrollTo({ left: Math.max(0, Math.min(scrollW - outer.clientWidth, targetLeft)), behavior: 'smooth' });
+    outer.scrollTo({ left: Math.max(0, Math.min(scrollW - outer.clientWidth, targetLeft)), behavior });
   }
 
   // 縦：ページ全体をスクロール（グリッドの該当位置が画面中央あたりに来るように）
   const gridRect = grid.getBoundingClientRect();
   const targetY = window.scrollY + gridRect.top + fy * gridRect.height - window.innerHeight / 2;
-  window.scrollTo({ top: Math.max(0, targetY), behavior: 'smooth' });
+  window.scrollTo({ top: Math.max(0, targetY), behavior });
+}
+
+function clientPointToMinimapFraction(clientX, clientY) {
+  const canvasWrap = document.querySelector('.seatmap-minimap-canvas-wrap');
+  const wrapRect = canvasWrap.getBoundingClientRect();
+  return {
+    fx: Math.min(1, Math.max(0, (clientX - wrapRect.left) / wrapRect.width)),
+    fy: Math.min(1, Math.max(0, (clientY - wrapRect.top)  / wrapRect.height)),
+  };
+}
+
+// ✅ タップ／クリックでジャンプ、押したままドラッグすると連続的にその位置へ追従スクロールする
+//    （マウス・タッチどちらもPointer Eventsで統一）
+const minimapWidget = document.getElementById('seatmap-minimap');
+let minimapDragging = false;
+
+minimapWidget.addEventListener('pointerdown', e => {
+  minimapDragging = true;
+  minimapWidget.setPointerCapture(e.pointerId);
+  const { fx, fy } = clientPointToMinimapFraction(e.clientX, e.clientY);
+  jumpToMinimapPoint(fx, fy, false); // 最初の一手は瞬時に反応させる
 });
+minimapWidget.addEventListener('pointermove', e => {
+  if (!minimapDragging) return;
+  const { fx, fy } = clientPointToMinimapFraction(e.clientX, e.clientY);
+  jumpToMinimapPoint(fx, fy, false); // ドラッグ追従はカクつかないよう瞬時に更新
+});
+function endMinimapDrag(e) {
+  if (!minimapDragging) return;
+  minimapDragging = false;
+  try { minimapWidget.releasePointerCapture(e.pointerId); } catch {}
+}
+minimapWidget.addEventListener('pointerup', endMinimapDrag);
+minimapWidget.addEventListener('pointercancel', endMinimapDrag);
+
+// ✅ ミニマップの上でホイール／トラックパッド操作をすると、本体側を直接スクロールできる
+//    （ミニマップは実際のマップよりずっと小さいため、動きを拡大して反映する）
+minimapWidget.addEventListener('wheel', e => {
+  e.preventDefault();
+  const outer = document.querySelector('.seatmap-outer');
+  const grid  = document.getElementById('seat-grid');
+  if (!outer || !grid || !minimapGridInfo) return;
+
+  const { canvasW, canvasH } = minimapGridInfo;
+  const scrollW = outer.scrollWidth;
+  const scaleX  = scrollW > outer.clientWidth ? scrollW / canvasW : 0;
+  const scaleY  = grid.getBoundingClientRect().height / canvasH;
+
+  if (scaleX > 0) {
+    outer.scrollBy({ left: e.deltaX * scaleX, behavior: 'instant' });
+  }
+  window.scrollBy({ top: e.deltaY * scaleY, behavior: 'instant' });
+}, { passive: false });
 
 // スクロール・リサイズのたびに現在地の枠を更新（rAFで間引き）
 let minimapUpdateQueued = false;
