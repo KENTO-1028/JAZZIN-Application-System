@@ -157,6 +157,39 @@ export async function getAdminUser() {
   return data?.user || null;
 }
 
+// ── お礼メール（管理画面から手動送信） ────────────────────────
+// 既存の send-confirmation-email Edge Function（Gmail送信基盤）を
+// 新しい mode:"send_thank_you_emails" で再利用する。
+// 予約確認メール・前日リマインダーの既存コード（mode未指定 / send_event_reminders）は一切変更していない。
+const EDGE_FUNCTION_URL = `${SUPABASE_URL}/functions/v1/send-confirmation-email`;
+
+export async function sendThankYouEmails({ eventId, reservationIds, subject, bodyTemplate }) {
+  // ✅ 一斉送信は管理者本人のログインセッション（JWT）で認証する。
+  //    公開のanonキーだけでは呼べないようにするため。
+  const { data: sessionData } = await supabase.auth.getSession();
+  const accessToken = sessionData?.session?.access_token;
+  if (!accessToken) throw new Error('ログインセッションが切れています。再ログインしてください');
+
+  const res = await fetch(EDGE_FUNCTION_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'apikey':        SUPABASE_ANON,
+      'Authorization': `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify({
+      mode:            'send_thank_you_emails',
+      event_id:        eventId,
+      reservation_ids: reservationIds,
+      subject,
+      body_template:   bodyTemplate,
+    }),
+  });
+  const data = await res.json();
+  if (!res.ok && !data?.error) throw new Error(`送信リクエスト失敗 (${res.status})`);
+  return data;
+}
+
 // ── Realtime ────────────────────────────────────────────────
 export function subscribeSeats(eventId, onSeatChange) {
   return supabase

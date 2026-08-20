@@ -163,8 +163,6 @@ textarea.form-input { min-height: 80px; resize: vertical; }
     <a href="/admin/layout-editor.html" class="sidebar-link">💺 座席レイアウト</a>
     <div class="sidebar-section">管理</div>
     <a href="#events" class="sidebar-link" data-section="events">🎵 イベント</a>
-    <a href="#reservations" class="sidebar-link" data-section="reservations">🎟 予約一覧</a>
-    <a href="#seats" class="sidebar-link" data-section="seats">💺 座席</a>
     <div style="margin-top:auto;padding:1rem 1.25rem">
       <button class="btn btn-ghost btn-sm btn-full" id="btn-signout">ログアウト</button>
     </div>
@@ -191,15 +189,17 @@ textarea.form-input { min-height: 80px; resize: vertical; }
         <div class="stat-card"><div class="stat-card-label">未入場(人)</div><div class="stat-card-value" id="s-remaining">--</div></div>
         <div class="stat-card"><div class="stat-card-label">回収額</div><div class="stat-card-value" id="s-cash" style="color:var(--accent-1)">--</div></div>
       </div>
-      <div style="display:flex;gap:0.75rem;margin-bottom:1rem">
+      <div style="display:flex;gap:0.75rem;margin-bottom:1rem;align-items:center;flex-wrap:wrap">
         <button class="btn btn-ghost btn-sm" id="btn-csv">📥 CSV出力</button>
+        <button class="btn btn-primary btn-sm" id="btn-thank-you" disabled>🎉 お礼メールを送る（<span id="thank-you-count">0</span>件選択中）</button>
       </div>
       <div style="overflow-x:auto">
         <table class="data-table" id="rsv-table">
           <thead>
             <tr>
+              <th><input type="checkbox" id="chk-select-all"></th>
               <th>受付番号</th><th>名前</th><th>性別</th><th>年齢</th><th>座席</th><th>人数</th>
-              <th>支払</th><th>チェックイン</th><th>状態</th><th>操作</th>
+              <th>支払</th><th>チェックイン</th><th>お礼メール</th><th>状態</th><th>操作</th>
             </tr>
           </thead>
           <tbody id="rsv-tbody"></tbody>
@@ -323,25 +323,13 @@ textarea.form-input { min-height: 80px; resize: vertical; }
       </div>
     </div>
 
-    <!-- Reservations (cross-event) -->
-    <div id="section-reservations" style="display:none">
-      <p class="page-title">予約一覧</p>
-      <p style="color:var(--text-secondary);font-size:0.875rem">ダッシュボードでイベントを選択してCSV出力できます</p>
-    </div>
-
-    <!-- Seats -->
-    <div id="section-seats" style="display:none">
-      <p class="page-title">座席管理</p>
-      <p style="color:var(--text-secondary);font-size:0.875rem">イベント作成時に自動生成されます</p>
-    </div>
-
   </main>
 </div>
 
 <div id="toast"></div>
 
 <script type="module">
-import { supabase, signOut, formatDate, formatPrice, cancelReservation } from '/core/supabase.js';
+import { supabase, signOut, formatDate, formatPrice, cancelReservation, sendThankYouEmails } from '/core/supabase.js';
 
 function showToast(msg,ms=2000){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),ms);}
 
@@ -396,12 +384,14 @@ document.getElementById('sel-event').addEventListener('change', e => {
 
 // ── Dashboard ────────────────────────────────────────────────
 let currentDashboardEvent = null;
+let selectedForThankYou = new Set();
 
 async function loadDashboard(ev) {
   currentDashboardEvent = ev;
+  selectedForThankYou = new Set();
   const [rsvData, checkinData] = await Promise.all([
     supabase.from('reservations')
-      .select('id, reservation_code, guest_name, guest_gender, guest_age_range, num_seats, payment_status, status, reservation_seats(seat:seats(label))')
+      .select('id, reservation_code, guest_name, guest_email, guest_gender, guest_age_range, num_seats, payment_status, status, thank_you_mail_sent, reservation_seats(seat:seats(label))')
       .eq('event_id', ev.id)
       .order('created_at'),
     supabase.from('checkins')
@@ -432,6 +422,7 @@ async function loadDashboard(ev) {
     const isIn  = checkins.has(r.id);
     const isCancelled = r.status === 'cancelled';
     return `<tr style="${isCancelled ? 'opacity:0.45' : ''}">
+      <td>${isCancelled ? '' : `<input type="checkbox" class="chk-thank-you" data-rsv-id="${r.id}">`}</td>
       <td style="font-weight:600;color:var(--accent-1)">${r.reservation_code}</td>
       <td>${r.guest_name}</td>
       <td>${r.guest_gender || '--'}</td>
@@ -440,12 +431,43 @@ async function loadDashboard(ev) {
       <td>${r.num_seats}</td>
       <td><span class="badge ${r.payment_status==='paid_cash'?'badge-ok':'badge-sold'}">${r.payment_status==='paid_cash'?'支払済':'未払い'}</span></td>
       <td><span class="badge ${isIn?'badge-ok':''}">${isIn?'入場済':'未入場'}</span></td>
+      <td>${r.thank_you_mail_sent ? '<span class="badge badge-ok">送信済</span>' : ''}</td>
       <td><span class="badge ${isCancelled?'badge-sold':'badge-ok'}">${isCancelled?'キャンセル済':'有効'}</span></td>
       <td>${isCancelled
         ? ''
         : `<button class="btn btn-ghost btn-sm" data-cancel-rsv="${r.id}" style="color:var(--c-red);border-color:rgba(255,107,107,0.2)">キャンセル</button>`}</td>
     </tr>`;
   }).join('');
+
+  // ✅ お礼メール選択チェックボックス
+  const countEl = document.getElementById('thank-you-count');
+  const sendBtn = document.getElementById('btn-thank-you');
+  function updateThankYouButton() {
+    countEl.textContent = selectedForThankYou.size;
+    sendBtn.disabled = selectedForThankYou.size === 0;
+  }
+  tbody.querySelectorAll('.chk-thank-you').forEach(chk => {
+    chk.checked = selectedForThankYou.has(chk.dataset.rsvId);
+    chk.addEventListener('change', () => {
+      if (chk.checked) selectedForThankYou.add(chk.dataset.rsvId);
+      else selectedForThankYou.delete(chk.dataset.rsvId);
+      updateThankYouButton();
+    });
+  });
+  updateThankYouButton();
+
+  const selectAll = document.getElementById('chk-select-all');
+  selectAll.checked = false;
+  selectAll.onchange = () => {
+    tbody.querySelectorAll('.chk-thank-you').forEach(chk => {
+      chk.checked = selectAll.checked;
+      if (selectAll.checked) selectedForThankYou.add(chk.dataset.rsvId);
+      else selectedForThankYou.delete(chk.dataset.rsvId);
+    });
+    updateThankYouButton();
+  };
+
+  sendBtn.onclick = () => openThankYouModal(reservations.filter(r => selectedForThankYou.has(r.id)), ev);
 
   // ✅ キャンセルボタン
   tbody.querySelectorAll('[data-cancel-rsv]').forEach(btn => {
@@ -473,6 +495,97 @@ async function loadDashboard(ev) {
 
   // CSV export
   document.getElementById('btn-csv').onclick = () => exportCSV(ev, reservations, checkins);
+}
+
+// ── お礼メール送信モーダル ──────────────────────────────────────
+const THANK_YOU_DEFAULT_SUBJECT = '【JAZZIN】ご来場ありがとうございました';
+const THANK_YOU_DEFAULT_BODY =
+`{guest_name} 様
+
+先日は「{event_title}」にご来場いただき、誠にありがとうございました。
+
+おかげさまで、素晴らしいひとときをお客様と共有しながら、無事にライブを終えることができました。
+{guest_name}様にお越しいただけたこと、スタッフ一同、心より嬉しく思っております。
+
+またJAZZINのライブでお会いできますことを、楽しみにお待ちしております。
+これからもJAZZINをどうぞよろしくお願いいたします。
+
+JAZZIN`;
+
+function openThankYouModal(recipients, ev) {
+  if (!recipients.length) return;
+  const validRecipients = recipients.filter(r => r.guest_email);
+  const skippedCount = recipients.length - validRecipients.length;
+
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,4,8,0.72);z-index:1000;display:flex;align-items:center;justify-content:center;padding:1rem';
+  overlay.innerHTML = `
+    <div style="background:var(--bg-card,#0c1622);border:1px solid var(--border,#1c2b3a);border-radius:var(--radius-lg,14px);max-width:600px;width:100%;max-height:90vh;overflow-y:auto;padding:1.75rem">
+      <p style="font-size:1.1rem;font-weight:700;margin:0 0 0.25rem">🎉 ライブ終了後のお礼メール</p>
+      <p style="font-size:0.82rem;color:var(--text-secondary,#8aa);margin:0 0 1.25rem">
+        送信対象：<strong style="color:var(--accent-1,#00d4ff)">${validRecipients.length}名</strong>
+        ${skippedCount > 0 ? `（メールアドレス未登録のため ${skippedCount}名は対象外）` : ''}
+      </p>
+      <div class="form-group" style="margin-bottom:0.9rem">
+        <label class="form-label">件名</label>
+        <input type="text" class="form-input" id="ty-subject" value="${THANK_YOU_DEFAULT_SUBJECT}">
+      </div>
+      <div class="form-group" style="margin-bottom:0.5rem">
+        <label class="form-label">本文（{guest_name} は名前、{event_title} はイベント名に自動置換されます）</label>
+        <textarea class="form-input" id="ty-body" rows="12" style="font-family:inherit;line-height:1.7;resize:vertical">${THANK_YOU_DEFAULT_BODY}</textarea>
+      </div>
+      <div id="ty-results" style="font-size:0.8rem;margin-bottom:0.75rem"></div>
+      <div style="display:flex;gap:0.6rem;justify-content:flex-end">
+        <button class="btn btn-ghost btn-sm" id="ty-cancel">キャンセル</button>
+        <button class="btn btn-primary btn-sm" id="ty-send">この内容で送信する</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+
+  overlay.querySelector('#ty-cancel').addEventListener('click', () => overlay.remove());
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+
+  overlay.querySelector('#ty-send').addEventListener('click', async () => {
+    const subject = overlay.querySelector('#ty-subject').value.trim();
+    const body    = overlay.querySelector('#ty-body').value;
+    if (!subject || !body.trim()) { showToast('件名と本文を入力してください'); return; }
+
+    // ✅ 誤送信防止：送信前に必ず確認する
+    if (!confirm(`${validRecipients.length}名にメールを送信します。本当に送信しますか？\n\nこの操作は取り消せません。`)) return;
+
+    const sendBtn = overlay.querySelector('#ty-send');
+    sendBtn.disabled = true; sendBtn.textContent = '送信中...';
+
+    try {
+      const result = await sendThankYouEmails({
+        eventId: ev.id,
+        reservationIds: validRecipients.map(r => r.id),
+        subject,
+        bodyTemplate: body,
+      });
+
+      if (!result?.success) {
+        overlay.querySelector('#ty-results').innerHTML =
+          `<p style="color:var(--c-red,#ff6b6b)">送信に失敗しました：${result?.error || '不明なエラー'}</p>`;
+        sendBtn.disabled = false; sendBtn.textContent = 'この内容で送信する';
+        return;
+      }
+
+      const failed = (result.results || []).filter(r => r.status !== 'sent');
+      overlay.querySelector('#ty-results').innerHTML = `
+        <p style="color:var(--c-green,#4ade80)">✓ 送信完了：成功 ${result.sent}件 / 失敗 ${result.failed}件</p>
+        ${failed.length ? `<p style="color:var(--c-red,#ff6b6b);margin-top:0.4rem">送信に失敗した宛先：<br>${failed.map(f=>`・${f.guest_name || ''}（${f.error || 'エラー'}）`).join('<br>')}</p>` : ''}
+      `;
+      sendBtn.style.display = 'none';
+      overlay.querySelector('#ty-cancel').textContent = '閉じる';
+      selectedForThankYou.clear();
+      await loadDashboard(ev);
+    } catch (err) {
+      overlay.querySelector('#ty-results').innerHTML =
+        `<p style="color:var(--c-red,#ff6b6b)">送信に失敗しました：${err.message || err}</p>`;
+      sendBtn.disabled = false; sendBtn.textContent = 'この内容で送信する';
+    }
+  });
 }
 
 function exportCSV(ev, reservations, checkins) {
