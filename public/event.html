@@ -131,6 +131,42 @@ body { min-height:100dvh; }
   .seatmap-minimap { padding:6px; }
 }
 
+/* ── 座席表そのものの拡大縮小コントロール（ミニマップの表示サイズ変更ボタンとは別物）──
+   誤認しないよう、あえてミニマップ（右上）とは反対の左上に固定配置し、
+   虫眼鏡アイコン＋%表示で「ミニマップの大きさ」ではなく「座席表の拡大率」であることを明示する。 */
+.seatzoom-control {
+  position: fixed;
+  top: calc(var(--header-h, 52px) + 10px + var(--sat, env(safe-area-inset-top,0px)));
+  left: max(10px, var(--sal, env(safe-area-inset-left,0px)));
+  z-index: 40;
+  display: none;
+  align-items: center; gap: 2px;
+  background: rgba(4,10,18,0.82);
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 4px 6px;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.35);
+  opacity: 0;
+  transition: opacity 180ms ease;
+}
+.seatzoom-control.visible { display: flex; }
+.seatzoom-control.shown   { opacity: 1; }
+.seatzoom-btn {
+  width: 26px; height: 26px; border-radius: 50%; padding: 0;
+  border: 1px solid var(--border-strong,rgba(255,255,255,0.15));
+  background: rgba(255,255,255,0.06); color: var(--text-secondary,#9ab);
+  font-size: 0.95rem; font-weight:700; cursor: pointer;
+  display:flex; align-items:center; justify-content:center; flex-shrink:0;
+}
+.seatzoom-btn:hover  { background: rgba(0,212,255,0.15); color: var(--accent-1); }
+.seatzoom-btn:active { transform: scale(0.92); }
+.seatzoom-pct {
+  font-family: var(--font-body); font-size: 0.68rem; font-weight:700;
+  color: var(--text-secondary,#9ab); min-width: 34px; text-align:center;
+}
+.seatzoom-icon { font-size:0.75rem; padding:0 2px; opacity:0.6; }
+
 /* ── Seat map wrapper ── */
 .seatmap-wrap {
   overflow-x: auto;
@@ -286,7 +322,14 @@ body { min-height:100dvh; }
 </header>
 <div id="toast"></div>
 
-<div class="seatmap-minimap" id="seatmap-minimap" title="ドラッグで移動 / ホイールでスクロール">
+<div class="seatzoom-control" id="seatzoom-control" title="座席表の拡大縮小">
+  <span class="seatzoom-icon">🔍</span>
+  <button type="button" class="seatzoom-btn" id="seatzoom-out">－</button>
+  <span class="seatzoom-pct" id="seatzoom-pct">100%</span>
+  <button type="button" class="seatzoom-btn" id="seatzoom-in">＋</button>
+</div>
+
+<div class="seatmap-minimap" id="seatmap-minimap" title="ドラッグで移動 / ホイールでスクロール / ピンチ・Ctrl+ホイールで座席表を拡大縮小">
   <div class="seatmap-minimap-toprow">
     <span class="seatmap-minimap-label">現在地</span>
     <div class="seatmap-minimap-zoom">
@@ -407,6 +450,35 @@ let event       = null;
 let seats       = [];
 let layoutMeta  = null; // {rows, cols, stage_position, aisles, entrances}
 let selectedIds = new Set();
+
+// ✅ 座席表の拡大縮小（ミニマップとは独立。ピンチ／Ctrl+ホイール／ボタンで操作）
+const SEAT_ZOOM_MIN = 0.1, SEAT_ZOOM_MAX = 2.2, SEAT_ZOOM_STEP = 0.15;
+let seatZoom      = 1;
+let baseSeatSize  = 36;
+let baseSeatGap   = 5;
+
+function updateSeatSizeVars(size, gap) {
+  document.documentElement.style.setProperty('--seat-sz', `${size}px`);
+  document.documentElement.style.setProperty('--seat-gap', `${gap}px`);
+  const gridEl = document.getElementById('seat-grid');
+  if (gridEl) gridEl.style.gap = `${gap}px`;
+  const seatStyle = document.getElementById('dynamic-seat-style') || (() => {
+    const s = document.createElement('style');
+    s.id = 'dynamic-seat-style';
+    document.head.appendChild(s);
+    return s;
+  })();
+  seatStyle.textContent = `.seat { width:${size}px !important; height:${size}px !important; font-size:${Math.max(6, size * 0.26)}px !important; letter-spacing:-0.02em; }
+.seat-placeholder { width:${size}px !important; height:${size}px !important; visibility:hidden; }`;
+}
+
+function applySeatZoom(newZoom) {
+  seatZoom = Math.max(SEAT_ZOOM_MIN, Math.min(SEAT_ZOOM_MAX, newZoom));
+  updateSeatSizeVars(baseSeatSize * seatZoom, baseSeatGap * seatZoom);
+  const pctEl = document.getElementById('seatzoom-pct');
+  if (pctEl) pctEl.textContent = `${Math.round(seatZoom * 100)}%`;
+  queueMinimapUpdate();
+}
 let lockTimer   = null;
 let lockExpiry  = null;
 const TICKET_PRICE = () => event?.ticket_price || 500;
@@ -583,22 +655,11 @@ function renderSeats(seatData, meta) {
 
   // Apply display settings from layout_meta
   const ds = meta?.display_settings || {};
-  const seatSize   = ds.seatSize   || 36;
-  const seatGap    = ds.seatGap    || 5;
+  baseSeatSize = ds.seatSize || 36;
+  baseSeatGap  = ds.seatGap  || 5;
 
-  // Override CSS variables for this event
-  document.documentElement.style.setProperty('--seat-sz', `${seatSize}px`);
-  document.documentElement.style.setProperty('--seat-gap', `${seatGap}px`);
-  grid.style.gap = `${seatGap}px`;
-  // Force all seats to use the configured size
-  const seatStyle = document.getElementById('dynamic-seat-style') || (() => {
-    const s = document.createElement('style');
-    s.id = 'dynamic-seat-style';
-    document.head.appendChild(s);
-    return s;
-  })();
-  seatStyle.textContent = `.seat { width:${seatSize}px !important; height:${seatSize}px !important; font-size:${Math.max(7, seatSize * 0.26)}px !important; letter-spacing:-0.02em; }
-.seat-placeholder { width:${seatSize}px !important; height:${seatSize}px !important; visibility:hidden; }`;
+  // ✅ 実際に適用するサイズは「基準サイズ × 現在のズーム倍率」
+  updateSeatSizeVars(baseSeatSize * seatZoom, baseSeatGap * seatZoom);
 
   const aisles    = new Set((meta?.aisles    || []).map(a => `${a.row},${a.col}`));
   const entrances = new Set((meta?.entrances || []).map(e => `${e.row},${e.col}`));
@@ -738,11 +799,13 @@ function renderMinimap(seatData, meta, totalRows, totalCols) {
 // ✅ 「今見えている範囲」の枠をミニマップ上に計算して重ねる
 function updateMinimapViewport() {
   const widget = document.getElementById('seatmap-minimap');
+  const zoomCtl = document.getElementById('seatzoom-control');
   const outer  = document.querySelector('.seatmap-outer');
   const grid   = document.getElementById('seat-grid');
   const vpEl   = document.getElementById('minimap-viewport');
   if (!widget || !outer || !grid || !vpEl || !minimapGridInfo) {
     if (widget) widget.classList.remove('visible', 'shown');
+    if (zoomCtl) zoomCtl.classList.remove('visible', 'shown');
     return;
   }
 
@@ -765,14 +828,30 @@ function updateMinimapViewport() {
   const overflowsH = scrollW > outer.clientWidth + 2;
   const overflowsV = rect.height > winH + 2;
 
-  // 画面内に収まりきっている（横も縦もはみ出していない）なら不要なので隠す
+  // 座席セクションが画面内に見えているかどうか（ズームコントロールの表示判定に使う）
+  const seatSectionVisible = rect.bottom > 0 && rect.top < winH;
+
+  // 画面内に収まりきっている（横も縦もはみ出していない）なら現在地枠は不要なので隠す
   if (!overflowsH && !overflowsV) {
     widget.classList.remove('shown');
     setTimeout(() => { if (!widget.classList.contains('shown')) widget.classList.remove('visible'); }, 200);
-    return;
+  } else {
+    widget.classList.add('visible');
+    requestAnimationFrame(() => widget.classList.add('shown'));
   }
-  widget.classList.add('visible');
-  requestAnimationFrame(() => widget.classList.add('shown'));
+
+  // ズームコントロールは、座席セクションが見えている間はグリッドの大小に関わらず常に表示
+  if (zoomCtl) {
+    if (seatSectionVisible) {
+      zoomCtl.classList.add('visible');
+      requestAnimationFrame(() => zoomCtl.classList.add('shown'));
+    } else {
+      zoomCtl.classList.remove('shown');
+      setTimeout(() => { if (!zoomCtl.classList.contains('shown')) zoomCtl.classList.remove('visible'); }, 200);
+    }
+  }
+
+  if (!overflowsH && !overflowsV) return;
 
   const left = (overflowsH ? hFracX * (1 - hFracW) : 0) * canvasW;
   const wpx  = (overflowsH ? hFracW : 1) * canvasW;
@@ -819,9 +898,12 @@ function clientPointToMinimapFraction(clientX, clientY) {
 //    （マウス・タッチどちらもPointer Eventsで統一）
 const minimapWidget = document.getElementById('seatmap-minimap');
 let minimapDragging = false;
+const minimapPointers = new Map(); // 2本指ピンチ検出用
+let minimapPinchStartDist = null, minimapPinchStartZoom = null;
 
-// ✅ ミニマップ自体の拡大縮小（特に「たくさん縮小」できるよう下限を低めに設定）
-const MINIMAP_ZOOM_MIN = 0.4, MINIMAP_ZOOM_MAX = 1.8, MINIMAP_ZOOM_STEP = 0.15;
+// ✅ ミニマップ自体の「表示サイズ」変更（座席表そのもののズームとは別物）。
+//    デフォルト(100%)より小さくはできない＝拡大のみ許可し、拡大後は100%まで戻せる。
+const MINIMAP_ZOOM_MIN = 1, MINIMAP_ZOOM_MAX = 2, MINIMAP_ZOOM_STEP = 0.15;
 let minimapZoom = 1;
 function applyMinimapZoom() {
   minimapWidget.style.transform = `scale(${minimapZoom})`;
@@ -837,44 +919,114 @@ document.getElementById('minimap-zoom-out').addEventListener('click', e => {
   applyMinimapZoom();
 });
 
+// ✅ 座席表そのものの拡大縮小ボタン（ミニマップの表示サイズとは別のコントロール）
+document.getElementById('seatzoom-in').addEventListener('click', () => applySeatZoom(seatZoom + SEAT_ZOOM_STEP));
+document.getElementById('seatzoom-out').addEventListener('click', () => applySeatZoom(seatZoom - SEAT_ZOOM_STEP));
+
 minimapWidget.addEventListener('pointerdown', e => {
   if (e.target.closest('.minimap-zoom-btn')) return; // ズームボタン操作はドラッグ扱いしない
-  minimapDragging = true;
   minimapWidget.setPointerCapture(e.pointerId);
-  const { fx, fy } = clientPointToMinimapFraction(e.clientX, e.clientY);
-  jumpToMinimapPoint(fx, fy, false); // 最初の一手は瞬時に反応させる
+  minimapPointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+  if (minimapPointers.size === 2) {
+    // 2本指になった瞬間：ドラッグ移動をやめ、ピンチズームに切り替える
+    minimapDragging = false;
+    const pts = [...minimapPointers.values()];
+    minimapPinchStartDist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+    minimapPinchStartZoom = seatZoom;
+  } else {
+    minimapDragging = true;
+    const { fx, fy } = clientPointToMinimapFraction(e.clientX, e.clientY);
+    jumpToMinimapPoint(fx, fy, false); // 最初の一手は瞬時に反応させる
+  }
 });
 minimapWidget.addEventListener('pointermove', e => {
-  if (!minimapDragging) return;
-  const { fx, fy } = clientPointToMinimapFraction(e.clientX, e.clientY);
-  jumpToMinimapPoint(fx, fy, false); // ドラッグ追従はカクつかないよう瞬時に更新
+  if (!minimapPointers.has(e.pointerId)) return;
+  minimapPointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+  if (minimapPointers.size === 2 && minimapPinchStartDist) {
+    const pts = [...minimapPointers.values()];
+    const dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+    applySeatZoom(minimapPinchStartZoom * (dist / minimapPinchStartDist));
+  } else if (minimapDragging) {
+    const { fx, fy } = clientPointToMinimapFraction(e.clientX, e.clientY);
+    jumpToMinimapPoint(fx, fy, false); // ドラッグ追従はカクつかないよう瞬時に更新
+  }
 });
 function endMinimapDrag(e) {
-  if (!minimapDragging) return;
-  minimapDragging = false;
+  minimapPointers.delete(e.pointerId);
   try { minimapWidget.releasePointerCapture(e.pointerId); } catch {}
+  if (minimapPointers.size < 2) minimapPinchStartDist = null;
+  minimapDragging = minimapPointers.size === 1;
 }
 minimapWidget.addEventListener('pointerup', endMinimapDrag);
 minimapWidget.addEventListener('pointercancel', endMinimapDrag);
 
-// ✅ ミニマップの上でホイール／トラックパッド操作をすると、本体側を直接スクロールできる
-//    （ミニマップは実際のマップよりずっと小さいため、動きを拡大して反映する）
+// ✅ ミニマップの上でのホイール／トラックパッド操作
+//    ・通常  → 本体をパン（移動量は「画面サイズに対する割合」で計算し、暴れないよう上限を設ける）
+//    ・Ctrl/Cmd併用（Macトラックパッドのピンチも含む）→ 座席表そのものを拡大縮小
 minimapWidget.addEventListener('wheel', e => {
   e.preventDefault();
-  const outer = document.querySelector('.seatmap-outer');
-  const grid  = document.getElementById('seat-grid');
-  if (!outer || !grid || !minimapGridInfo) return;
 
-  const { canvasW, canvasH } = minimapGridInfo;
-  const scrollW = outer.scrollWidth;
-  const scaleX  = scrollW > outer.clientWidth ? scrollW / canvasW : 0;
-  const scaleY  = grid.getBoundingClientRect().height / canvasH;
-
-  if (scaleX > 0) {
-    outer.scrollBy({ left: e.deltaX * scaleX, behavior: 'instant' });
+  if (e.ctrlKey || e.metaKey) {
+    const factor = e.deltaY < 0 ? 1.08 : 0.92;
+    applySeatZoom(seatZoom * factor);
+    return;
   }
-  window.scrollBy({ top: e.deltaY * scaleY, behavior: 'instant' });
+
+  const outer = document.querySelector('.seatmap-outer');
+  if (!outer) return;
+  const maxStepX = outer.clientWidth  * 0.35;
+  const maxStepY = window.innerHeight * 0.35;
+  const stepX = Math.max(-maxStepX, Math.min(maxStepX, e.deltaX * 3));
+  const stepY = Math.max(-maxStepY, Math.min(maxStepY, e.deltaY * 3));
+
+  if (outer.scrollWidth > outer.clientWidth) outer.scrollBy({ left: stepX, behavior: 'auto' });
+  window.scrollBy({ top: stepY, behavior: 'auto' });
 }, { passive: false });
+
+// ✅ 座席表そのものの上での操作
+//    ・通常のタップ／1本指スクロールはブラウザ標準のまま（邪魔しない）
+//    ・2本指ピンチ、Ctrl/Cmd+ホイールでズーム
+const seatmapOuterEl = document.querySelector('.seatmap-outer');
+if (seatmapOuterEl) {
+  const seatPointers = new Map();
+  let seatPinchStartDist = null, seatPinchStartZoom = null;
+
+  seatmapOuterEl.addEventListener('pointerdown', e => {
+    if (e.pointerType !== 'touch') return;
+    seatPointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (seatPointers.size === 2) {
+      seatmapOuterEl.setPointerCapture(e.pointerId);
+      const pts = [...seatPointers.values()];
+      seatPinchStartDist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+      seatPinchStartZoom = seatZoom;
+    }
+  });
+  seatmapOuterEl.addEventListener('pointermove', e => {
+    if (!seatPointers.has(e.pointerId)) return;
+    seatPointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (seatPointers.size === 2 && seatPinchStartDist) {
+      e.preventDefault();
+      const pts = [...seatPointers.values()];
+      const dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+      applySeatZoom(seatPinchStartZoom * (dist / seatPinchStartDist));
+    }
+  }, { passive: false });
+  function endSeatPinch(e) {
+    seatPointers.delete(e.pointerId);
+    if (seatPointers.size < 2) seatPinchStartDist = null;
+  }
+  seatmapOuterEl.addEventListener('pointerup', endSeatPinch);
+  seatmapOuterEl.addEventListener('pointercancel', endSeatPinch);
+
+  seatmapOuterEl.addEventListener('wheel', e => {
+    if (!(e.ctrlKey || e.metaKey)) return; // 通常のスクロールは邪魔しない
+    e.preventDefault();
+    const factor = e.deltaY < 0 ? 1.08 : 0.92;
+    applySeatZoom(seatZoom * factor);
+  }, { passive: false });
+}
 
 // スクロール・リサイズのたびに現在地の枠を更新（rAFで間引き）
 let minimapUpdateQueued = false;

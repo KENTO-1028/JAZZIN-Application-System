@@ -38,7 +38,7 @@ body { min-height:100dvh; }
 .tool-icon { font-size:1rem; width:20px; text-align:center; flex-shrink:0; }
 
 /* Grid editor */
-.grid-editor-wrap { overflow-x:auto; margin-bottom:1rem; }
+.grid-editor-wrap { overflow-x:auto; margin-bottom:1rem; touch-action:pan-x pan-y; }
 
 /* ── Minimap（座席エディタでも現在地を確認できるようにする） ── */
 .editor-minimap {
@@ -90,6 +90,42 @@ body { min-height:100dvh; }
   pointer-events: none;
   box-shadow: 0 0 6px rgba(0,212,255,0.35);
 }
+
+/* ── 座席表そのものの拡大縮小コントロール（ミニマップの表示サイズ変更ボタンとは別物）──
+   誤認しないよう、ミニマップ（右上）とは反対の左上に固定配置する。 */
+.editorzoom-control {
+  position: fixed;
+  top: 66px;
+  left: max(12px, env(safe-area-inset-left,0px));
+  z-index: 60;
+  display: none;
+  align-items: center; gap: 2px;
+  background: rgba(4,10,18,0.85);
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  border: 1px solid var(--glass-border);
+  border-radius: 20px;
+  padding: 4px 6px;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.4);
+  opacity: 0;
+  transition: opacity 180ms ease;
+}
+.editorzoom-control.visible { display: flex; }
+.editorzoom-control.shown   { opacity: 1; }
+.editorzoom-btn {
+  width: 26px; height: 26px; border-radius: 50%; padding: 0;
+  border: 1px solid var(--glass-border);
+  background: rgba(255,255,255,0.06); color: var(--text-sub);
+  font-size: 0.95rem; font-weight:700; cursor: pointer;
+  display:flex; align-items:center; justify-content:center; flex-shrink:0;
+}
+.editorzoom-btn:hover  { background: rgba(0,212,255,0.15); color: var(--accent-1); }
+.editorzoom-btn:active { transform: scale(0.92); }
+.editorzoom-pct {
+  font-family: var(--font-display); font-size: 0.68rem; font-weight:700;
+  color: var(--text-sub); min-width: 34px; text-align:center;
+}
+.editorzoom-icon { font-size:0.75rem; padding:0 2px; opacity:0.6; }
+
 .grid-editor {
   display:inline-grid;
   gap:4px;
@@ -182,7 +218,14 @@ body { min-height:100dvh; }
 
 <div id="toast"></div>
 
-<div class="editor-minimap" id="editor-minimap" title="ドラッグで移動 / ホイールでスクロール">
+<div class="editorzoom-control" id="editorzoom-control" title="座席表の拡大縮小">
+  <span class="editorzoom-icon">🔍</span>
+  <button type="button" class="editorzoom-btn" id="editorzoom-out">－</button>
+  <span class="editorzoom-pct" id="editorzoom-pct">100%</span>
+  <button type="button" class="editorzoom-btn" id="editorzoom-in">＋</button>
+</div>
+
+<div class="editor-minimap" id="editor-minimap" title="ドラッグで移動 / ホイールでスクロール / ピンチ・Ctrl+ホイールで座席表を拡大縮小">
   <div class="editor-minimap-toprow">
     <span class="editor-minimap-label">現在地</span>
     <div class="editor-minimap-zoom">
@@ -353,6 +396,18 @@ let displaySettings = {
   stageLabel:  '— STAGE —',
 };
 
+// ✅ エディタ画面だけの一時的な拡大縮小（displaySettingsには保存しない・保存対象と無関係）
+const EDITOR_ZOOM_MIN = 0.1, EDITOR_ZOOM_MAX = 2.2, EDITOR_ZOOM_STEP = 0.15;
+let editorZoom = 1;
+
+function applyEditorZoom(newZoom) {
+  editorZoom = Math.max(EDITOR_ZOOM_MIN, Math.min(EDITOR_ZOOM_MAX, newZoom));
+  applyDisplaySettings();
+  const pctEl = document.getElementById('editorzoom-pct');
+  if (pctEl) pctEl.textContent = `${Math.round(editorZoom * 100)}%`;
+  queueEditorMinimapUpdate();
+}
+
 function initDisplayControls() {
   const seatSizeRange   = document.getElementById('seat-size-range');
   const seatGapRange    = document.getElementById('seat-gap-range');
@@ -382,13 +437,16 @@ function initDisplayControls() {
 function applyDisplaySettings() {
   const grid = document.getElementById('grid-editor');
   if (!grid) return;
-  grid.style.gap = `${displaySettings.seatGap}px`;
+  // ✅ 実際に画面へ反映するのは「保存される基準サイズ × 画面表示だけのズーム倍率」
+  const effSize = displaySettings.seatSize * editorZoom;
+  const effGap  = displaySettings.seatGap  * editorZoom;
+  grid.style.gap = `${effGap}px`;
   // update cell sizes
   document.querySelectorAll('.editor-cell').forEach(c => {
-    c.style.width  = `${displaySettings.seatSize}px`;
-    c.style.height = `${displaySettings.seatSize}px`;
+    c.style.width  = `${effSize}px`;
+    c.style.height = `${effSize}px`;
   });
-  // stage indicator height
+  // stage indicator height（ズームの影響は受けない：レイアウト全体の目印として常に一定）
   ['stage-indicator-top','stage-indicator-bottom'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.style.height = `${displaySettings.stageHeight}px`;
@@ -757,14 +815,16 @@ function renderGrid() {
     }
   });
 
-  // Apply cell sizes
+  // Apply cell sizes（保存対象の基準サイズ × 画面表示だけのズーム倍率）
   requestAnimationFrame(() => {
     const gridEl = document.getElementById('grid-editor');
     if (gridEl) {
-      gridEl.style.gap = `${displaySettings.seatGap}px`;
+      const effSize = displaySettings.seatSize * editorZoom;
+      const effGap  = displaySettings.seatGap  * editorZoom;
+      gridEl.style.gap = `${effGap}px`;
       document.querySelectorAll('.editor-cell').forEach(c => {
-        c.style.width  = `${displaySettings.seatSize}px`;
-        c.style.height = `${displaySettings.seatSize}px`;
+        c.style.width  = `${effSize}px`;
+        c.style.height = `${effSize}px`;
       });
     }
   });
@@ -859,12 +919,14 @@ function renderEditorMinimap() {
 
 function updateEditorMinimapViewport() {
   const widget = document.getElementById('editor-minimap');
+  const zoomCtl = document.getElementById('editorzoom-control');
   const outer  = document.querySelector('.grid-editor-wrap');
   const mainEl = document.querySelector('.editor-main');
   const gridEl = document.getElementById('grid-editor');
   const vpEl   = document.getElementById('editor-minimap-viewport');
   if (!widget || !outer || !mainEl || !gridEl || !vpEl || !editorMinimapInfo) {
     if (widget) widget.classList.remove('visible', 'shown');
+    if (zoomCtl) zoomCtl.classList.remove('visible', 'shown');
     return;
   }
 
@@ -886,14 +948,27 @@ function updateEditorMinimapViewport() {
 
   const overflowsH = scrollW > outer.clientWidth + 2;
   const overflowsV = gridRect.height > mainRect.height + 2;
+  const gridSectionVisible = gridRect.bottom > mainRect.top && gridRect.top < mainRect.bottom;
 
   if (!overflowsH && !overflowsV) {
     widget.classList.remove('shown');
     setTimeout(() => { if (!widget.classList.contains('shown')) widget.classList.remove('visible'); }, 200);
-    return;
+  } else {
+    widget.classList.add('visible');
+    requestAnimationFrame(() => widget.classList.add('shown'));
   }
-  widget.classList.add('visible');
-  requestAnimationFrame(() => widget.classList.add('shown'));
+
+  if (zoomCtl) {
+    if (gridSectionVisible) {
+      zoomCtl.classList.add('visible');
+      requestAnimationFrame(() => zoomCtl.classList.add('shown'));
+    } else {
+      zoomCtl.classList.remove('shown');
+      setTimeout(() => { if (!zoomCtl.classList.contains('shown')) zoomCtl.classList.remove('visible'); }, 200);
+    }
+  }
+
+  if (!overflowsH && !overflowsV) return;
 
   const left = (overflowsH ? hFracX * (1 - hFracW) : 0) * canvasW;
   const wpx  = (overflowsH ? hFracW : 1) * canvasW;
@@ -937,9 +1012,12 @@ function jumpToEditorMinimapPoint(fx, fy, smooth) {
 
 const editorMinimapWidget = document.getElementById('editor-minimap');
 let editorMinimapDragging = false;
+const editorMinimapPointers = new Map();
+let editorMinimapPinchStartDist = null, editorMinimapPinchStartZoom = null;
 
-// ✅ ミニマップ自体の拡大縮小（特に「たくさん縮小」できるよう下限を低めに設定）
-const EDITOR_MINIMAP_ZOOM_MIN = 0.4, EDITOR_MINIMAP_ZOOM_MAX = 1.8, EDITOR_MINIMAP_ZOOM_STEP = 0.15;
+// ✅ ミニマップ自体の「表示サイズ」変更（座席表そのもののズームとは別物）。
+//    デフォルト(100%)より小さくはできない＝拡大のみ許可し、拡大後は100%まで戻せる。
+const EDITOR_MINIMAP_ZOOM_MIN = 1, EDITOR_MINIMAP_ZOOM_MAX = 2, EDITOR_MINIMAP_ZOOM_STEP = 0.15;
 let editorMinimapZoom = 1;
 function applyEditorMinimapZoom() {
   editorMinimapWidget.style.transform = `scale(${editorMinimapZoom})`;
@@ -955,42 +1033,114 @@ document.getElementById('editor-minimap-zoom-out').addEventListener('click', e =
   applyEditorMinimapZoom();
 });
 
+// ✅ 座席表そのものの拡大縮小ボタン（ミニマップの表示サイズとは別のコントロール）
+document.getElementById('editorzoom-in').addEventListener('click', () => applyEditorZoom(editorZoom + EDITOR_ZOOM_STEP));
+document.getElementById('editorzoom-out').addEventListener('click', () => applyEditorZoom(editorZoom - EDITOR_ZOOM_STEP));
+
 editorMinimapWidget.addEventListener('pointerdown', e => {
   if (e.target.closest('.minimap-zoom-btn')) return;
-  editorMinimapDragging = true;
   editorMinimapWidget.setPointerCapture(e.pointerId);
-  const { fx, fy } = editorMinimapPointToFraction(e.clientX, e.clientY);
-  jumpToEditorMinimapPoint(fx, fy, false);
+  editorMinimapPointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+  if (editorMinimapPointers.size === 2) {
+    editorMinimapDragging = false;
+    const pts = [...editorMinimapPointers.values()];
+    editorMinimapPinchStartDist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+    editorMinimapPinchStartZoom = editorZoom;
+  } else {
+    editorMinimapDragging = true;
+    const { fx, fy } = editorMinimapPointToFraction(e.clientX, e.clientY);
+    jumpToEditorMinimapPoint(fx, fy, false);
+  }
 });
 editorMinimapWidget.addEventListener('pointermove', e => {
-  if (!editorMinimapDragging) return;
-  const { fx, fy } = editorMinimapPointToFraction(e.clientX, e.clientY);
-  jumpToEditorMinimapPoint(fx, fy, false);
+  if (!editorMinimapPointers.has(e.pointerId)) return;
+  editorMinimapPointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+  if (editorMinimapPointers.size === 2 && editorMinimapPinchStartDist) {
+    const pts = [...editorMinimapPointers.values()];
+    const dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+    applyEditorZoom(editorMinimapPinchStartZoom * (dist / editorMinimapPinchStartDist));
+  } else if (editorMinimapDragging) {
+    const { fx, fy } = editorMinimapPointToFraction(e.clientX, e.clientY);
+    jumpToEditorMinimapPoint(fx, fy, false);
+  }
 });
 function endEditorMinimapDrag(e) {
-  if (!editorMinimapDragging) return;
-  editorMinimapDragging = false;
+  editorMinimapPointers.delete(e.pointerId);
   try { editorMinimapWidget.releasePointerCapture(e.pointerId); } catch {}
+  if (editorMinimapPointers.size < 2) editorMinimapPinchStartDist = null;
+  editorMinimapDragging = editorMinimapPointers.size === 1;
 }
 editorMinimapWidget.addEventListener('pointerup', endEditorMinimapDrag);
 editorMinimapWidget.addEventListener('pointercancel', endEditorMinimapDrag);
 
-// ✅ ミニマップ上でのホイール操作で、エディタ本体を直接スクロールできる
+// ✅ ミニマップ上でのホイール／トラックパッド操作
+//    ・通常  → エディタ本体をパン（画面サイズに対する割合で計算し、暴れないよう上限を設ける）
+//    ・Ctrl/Cmd併用（Macトラックパッドのピンチも含む）→ 座席表そのものを拡大縮小
 editorMinimapWidget.addEventListener('wheel', e => {
   e.preventDefault();
+
+  if (e.ctrlKey || e.metaKey) {
+    const factor = e.deltaY < 0 ? 1.08 : 0.92;
+    applyEditorZoom(editorZoom * factor);
+    return;
+  }
+
   const outer  = document.querySelector('.grid-editor-wrap');
   const mainEl = document.querySelector('.editor-main');
-  const gridEl = document.getElementById('grid-editor');
-  if (!outer || !mainEl || !gridEl || !editorMinimapInfo) return;
+  if (!outer || !mainEl) return;
+  const maxStepX = outer.clientWidth  * 0.35;
+  const maxStepY = mainEl.clientHeight * 0.35;
+  const stepX = Math.max(-maxStepX, Math.min(maxStepX, e.deltaX * 3));
+  const stepY = Math.max(-maxStepY, Math.min(maxStepY, e.deltaY * 3));
 
-  const { canvasW, canvasH } = editorMinimapInfo;
-  const scrollW = outer.scrollWidth;
-  const scaleX  = scrollW > outer.clientWidth ? scrollW / canvasW : 0;
-  const scaleY  = gridEl.getBoundingClientRect().height / canvasH;
-
-  if (scaleX > 0) outer.scrollBy({ left: e.deltaX * scaleX, behavior: 'instant' });
-  mainEl.scrollBy({ top: e.deltaY * scaleY, behavior: 'instant' });
+  if (outer.scrollWidth > outer.clientWidth) outer.scrollBy({ left: stepX, behavior: 'auto' });
+  mainEl.scrollBy({ top: stepY, behavior: 'auto' });
 }, { passive: false });
+
+// ✅ 座席エディタ本体の上での操作
+//    ・通常のタップ／1本指スクロールは標準のまま（座席の編集操作を邪魔しない）
+//    ・2本指ピンチ、Ctrl/Cmd+ホイールでズーム
+const gridEditorWrapEl = document.querySelector('.grid-editor-wrap');
+if (gridEditorWrapEl) {
+  const editorPointers = new Map();
+  let editorPinchStartDist = null, editorPinchStartZoom = null;
+
+  gridEditorWrapEl.addEventListener('pointerdown', e => {
+    if (e.pointerType !== 'touch') return;
+    editorPointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (editorPointers.size === 2) {
+      gridEditorWrapEl.setPointerCapture(e.pointerId);
+      const pts = [...editorPointers.values()];
+      editorPinchStartDist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+      editorPinchStartZoom = editorZoom;
+    }
+  });
+  gridEditorWrapEl.addEventListener('pointermove', e => {
+    if (!editorPointers.has(e.pointerId)) return;
+    editorPointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (editorPointers.size === 2 && editorPinchStartDist) {
+      e.preventDefault();
+      const pts = [...editorPointers.values()];
+      const dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+      applyEditorZoom(editorPinchStartZoom * (dist / editorPinchStartDist));
+    }
+  }, { passive: false });
+  function endEditorPinch(e) {
+    editorPointers.delete(e.pointerId);
+    if (editorPointers.size < 2) editorPinchStartDist = null;
+  }
+  gridEditorWrapEl.addEventListener('pointerup', endEditorPinch);
+  gridEditorWrapEl.addEventListener('pointercancel', endEditorPinch);
+
+  gridEditorWrapEl.addEventListener('wheel', e => {
+    if (!(e.ctrlKey || e.metaKey)) return; // 通常のスクロールは邪魔しない
+    e.preventDefault();
+    const factor = e.deltaY < 0 ? 1.08 : 0.92;
+    applyEditorZoom(editorZoom * factor);
+  }, { passive: false });
+}
 
 let editorMinimapUpdateQueued = false;
 function queueEditorMinimapUpdate() {
