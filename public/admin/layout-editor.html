@@ -39,6 +39,57 @@ body { min-height:100dvh; }
 
 /* Grid editor */
 .grid-editor-wrap { overflow-x:auto; margin-bottom:1rem; }
+
+/* ── Minimap（座席エディタでも現在地を確認できるようにする） ── */
+.editor-minimap {
+  position: fixed;
+  top: 66px;
+  right: max(12px, env(safe-area-inset-right,0px));
+  z-index: 60;
+  background: rgba(4,10,18,0.85);
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  padding: 7px;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.4);
+  display: none;
+  opacity: 0;
+  transition: opacity 180ms ease, transform 120ms ease;
+  transform-origin: top right;
+  cursor: grab;
+  touch-action: none;
+}
+.editor-minimap:active { cursor: grabbing; }
+.editor-minimap.visible { display: block; }
+.editor-minimap.shown   { opacity: 1; }
+.editor-minimap-toprow {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 6px; margin-bottom: 4px;
+}
+.editor-minimap-label {
+  font-family: var(--font-display); font-size: 0.56rem; font-weight:600;
+  letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--text-sub);
+}
+.editor-minimap-zoom { display:flex; gap:3px; }
+.editor-minimap .minimap-zoom-btn {
+  width: 18px; height: 18px; line-height: 16px; padding: 0;
+  border-radius: 4px; border: 1px solid var(--glass-border);
+  background: rgba(255,255,255,0.06); color: var(--text-sub);
+  font-size: 0.7rem; font-weight:700; cursor: pointer; text-align:center;
+}
+.editor-minimap .minimap-zoom-btn:hover  { background: rgba(0,212,255,0.15); color: var(--accent-1); }
+.editor-minimap .minimap-zoom-btn:active { transform: scale(0.9); }
+.editor-minimap-canvas-wrap { position: relative; display:block; line-height:0; }
+.editor-minimap canvas { display:block; border-radius: 3px; }
+.editor-minimap-viewport {
+  position: absolute;
+  border: 1.5px solid var(--accent-1);
+  background: rgba(0,212,255,0.14);
+  border-radius: 2px;
+  pointer-events: none;
+  box-shadow: 0 0 6px rgba(0,212,255,0.35);
+}
 .grid-editor {
   display:inline-grid;
   gap:4px;
@@ -130,6 +181,20 @@ body { min-height:100dvh; }
 </header>
 
 <div id="toast"></div>
+
+<div class="editor-minimap" id="editor-minimap" title="ドラッグで移動 / ホイールでスクロール">
+  <div class="editor-minimap-toprow">
+    <span class="editor-minimap-label">現在地</span>
+    <div class="editor-minimap-zoom">
+      <button type="button" class="minimap-zoom-btn" id="editor-minimap-zoom-out" title="縮小">－</button>
+      <button type="button" class="minimap-zoom-btn" id="editor-minimap-zoom-in" title="拡大">＋</button>
+    </div>
+  </div>
+  <div class="editor-minimap-canvas-wrap">
+    <canvas id="editor-minimap-canvas"></canvas>
+    <div class="editor-minimap-viewport" id="editor-minimap-viewport"></div>
+  </div>
+</div>
 
 <div id="auth-guard" style="display:none;text-align:center;padding:4rem">
   <p style="margin-bottom:1rem">管理者ログインが必要です</p>
@@ -705,6 +770,8 @@ function renderGrid() {
   });
 
   updateStats();
+  renderEditorMinimap();
+  requestAnimationFrame(updateEditorMinimapViewport);
 }
 
 function applyCell(el, type, label) {
@@ -730,7 +797,213 @@ function paintCell(r, c) {
   if (el) applyCell(el, currentTool, grid[r][c].label);
   updateStats();
   scheduleAutosave();
+  renderEditorMinimap();
 }
+
+// ══════════════════════════════════════════════════════════════
+// ✅ Editor minimap（座席エディタでの「現在地」インジケータ）
+//    event.html側と同じ考え方だが、エディタは
+//    ・横スクロール: .grid-editor-wrap
+//    ・縦スクロール: .editor-main（ページ全体ではなく内部スクロール）
+//    という構造の違いがあるため、それに合わせて計算する。
+// ══════════════════════════════════════════════════════════════
+let editorMinimapInfo = null;
+
+function renderEditorMinimap() {
+  const canvas = document.getElementById('editor-minimap-canvas');
+  const widget = document.getElementById('editor-minimap');
+  if (!canvas || !widget || !grid.length) return;
+
+  const MAX_W = 132, MAX_H = 132, MIN_CELL = 1.2, MAX_CELL = 9;
+  const cellPx = Math.max(MIN_CELL, Math.min(MAX_CELL, Math.min(MAX_W / cols, MAX_H / rows)));
+  const dpr = window.devicePixelRatio || 1;
+  const canvasW = cellPx * cols;
+  const canvasH = cellPx * rows;
+
+  canvas.style.width  = `${canvasW}px`;
+  canvas.style.height = `${canvasH}px`;
+  canvas.width  = Math.round(canvasW * dpr);
+  canvas.height = Math.round(canvasH * dpr);
+
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, canvasW, canvasH);
+
+  for (let r = 1; r <= rows; r++) {
+    for (let c = 1; c <= cols; c++) {
+      const cell = grid[r]?.[c];
+      if (!cell) continue;
+      const x = (c - 1) * cellPx, y = (r - 1) * cellPx;
+      const pad = cellPx > 3 ? 0.5 : 0;
+      let color;
+      if (cell.type === 'seat') {
+        color = cell.locked ? 'rgba(255,107,107,0.75)' : 'rgba(255,255,255,0.32)';
+      } else if (cell.type === 'entrance') {
+        color = 'rgba(255,200,0,0.4)';
+      } else if (cell.type === 'stage') {
+        color = 'rgba(0,212,255,0.4)';
+      } else if (cell.type === 'wall') {
+        color = 'rgba(255,255,255,0.1)';
+      } else {
+        color = 'transparent'; // aisle
+      }
+      if (color !== 'transparent') {
+        ctx.fillStyle = color;
+        ctx.fillRect(x + pad, y + pad, cellPx - pad * 2, cellPx - pad * 2);
+      }
+    }
+  }
+
+  editorMinimapInfo = { canvasW, canvasH };
+}
+
+function updateEditorMinimapViewport() {
+  const widget = document.getElementById('editor-minimap');
+  const outer  = document.querySelector('.grid-editor-wrap');
+  const mainEl = document.querySelector('.editor-main');
+  const gridEl = document.getElementById('grid-editor');
+  const vpEl   = document.getElementById('editor-minimap-viewport');
+  if (!widget || !outer || !mainEl || !gridEl || !vpEl || !editorMinimapInfo) {
+    if (widget) widget.classList.remove('visible', 'shown');
+    return;
+  }
+
+  const { canvasW, canvasH } = editorMinimapInfo;
+
+  // 横方向：.grid-editor-wrap のスクロール
+  const scrollW = outer.scrollWidth || 1;
+  const hFracW  = Math.min(1, outer.clientWidth / scrollW);
+  const hFracX  = scrollW > outer.clientWidth ? outer.scrollLeft / (scrollW - outer.clientWidth) : 0;
+
+  // 縦方向：.editor-main の内部スクロール（ページ全体ではない点がevent.htmlと異なる）
+  const mainRect = mainEl.getBoundingClientRect();
+  const gridRect = gridEl.getBoundingClientRect();
+  const relTop   = gridRect.top - mainRect.top;
+  const visibleTop    = Math.min(Math.max(0, -relTop), gridRect.height);
+  const visibleBottom = Math.min(Math.max(0, mainRect.height - relTop), gridRect.height);
+  const vFracY = gridRect.height > 0 ? visibleTop / gridRect.height : 0;
+  const vFracH = gridRect.height > 0 ? Math.max(0, (visibleBottom - visibleTop) / gridRect.height) : 1;
+
+  const overflowsH = scrollW > outer.clientWidth + 2;
+  const overflowsV = gridRect.height > mainRect.height + 2;
+
+  if (!overflowsH && !overflowsV) {
+    widget.classList.remove('shown');
+    setTimeout(() => { if (!widget.classList.contains('shown')) widget.classList.remove('visible'); }, 200);
+    return;
+  }
+  widget.classList.add('visible');
+  requestAnimationFrame(() => widget.classList.add('shown'));
+
+  const left = (overflowsH ? hFracX * (1 - hFracW) : 0) * canvasW;
+  const wpx  = (overflowsH ? hFracW : 1) * canvasW;
+  const top  = vFracY * canvasH;
+  const hpx  = Math.max(4, vFracH * canvasH);
+
+  vpEl.style.left   = `${Math.max(0, left)}px`;
+  vpEl.style.top    = `${Math.max(0, top)}px`;
+  vpEl.style.width  = `${Math.min(canvasW, wpx)}px`;
+  vpEl.style.height = `${Math.min(canvasH, hpx)}px`;
+}
+
+function editorMinimapPointToFraction(clientX, clientY) {
+  const wrap = document.querySelector('.editor-minimap-canvas-wrap');
+  const r = wrap.getBoundingClientRect();
+  return {
+    fx: Math.min(1, Math.max(0, (clientX - r.left) / r.width)),
+    fy: Math.min(1, Math.max(0, (clientY - r.top)  / r.height)),
+  };
+}
+
+function jumpToEditorMinimapPoint(fx, fy, smooth) {
+  const outer  = document.querySelector('.grid-editor-wrap');
+  const mainEl = document.querySelector('.editor-main');
+  const gridEl = document.getElementById('grid-editor');
+  if (!outer || !mainEl || !gridEl) return;
+  const behavior = smooth ? 'smooth' : 'instant';
+
+  const scrollW = outer.scrollWidth;
+  if (scrollW > outer.clientWidth) {
+    const targetLeft = fx * scrollW - outer.clientWidth / 2;
+    outer.scrollTo({ left: Math.max(0, Math.min(scrollW - outer.clientWidth, targetLeft)), behavior });
+  }
+
+  const mainRect = mainEl.getBoundingClientRect();
+  const gridRect = gridEl.getBoundingClientRect();
+  const relTop   = gridRect.top - mainRect.top;
+  const targetTop = mainEl.scrollTop + relTop + fy * gridRect.height - mainRect.height / 2;
+  mainEl.scrollTo({ top: Math.max(0, Math.min(mainEl.scrollHeight - mainEl.clientHeight, targetTop)), behavior });
+}
+
+const editorMinimapWidget = document.getElementById('editor-minimap');
+let editorMinimapDragging = false;
+
+// ✅ ミニマップ自体の拡大縮小（特に「たくさん縮小」できるよう下限を低めに設定）
+const EDITOR_MINIMAP_ZOOM_MIN = 0.4, EDITOR_MINIMAP_ZOOM_MAX = 1.8, EDITOR_MINIMAP_ZOOM_STEP = 0.15;
+let editorMinimapZoom = 1;
+function applyEditorMinimapZoom() {
+  editorMinimapWidget.style.transform = `scale(${editorMinimapZoom})`;
+}
+document.getElementById('editor-minimap-zoom-in').addEventListener('click', e => {
+  e.stopPropagation();
+  editorMinimapZoom = Math.min(EDITOR_MINIMAP_ZOOM_MAX, +(editorMinimapZoom + EDITOR_MINIMAP_ZOOM_STEP).toFixed(2));
+  applyEditorMinimapZoom();
+});
+document.getElementById('editor-minimap-zoom-out').addEventListener('click', e => {
+  e.stopPropagation();
+  editorMinimapZoom = Math.max(EDITOR_MINIMAP_ZOOM_MIN, +(editorMinimapZoom - EDITOR_MINIMAP_ZOOM_STEP).toFixed(2));
+  applyEditorMinimapZoom();
+});
+
+editorMinimapWidget.addEventListener('pointerdown', e => {
+  if (e.target.closest('.minimap-zoom-btn')) return;
+  editorMinimapDragging = true;
+  editorMinimapWidget.setPointerCapture(e.pointerId);
+  const { fx, fy } = editorMinimapPointToFraction(e.clientX, e.clientY);
+  jumpToEditorMinimapPoint(fx, fy, false);
+});
+editorMinimapWidget.addEventListener('pointermove', e => {
+  if (!editorMinimapDragging) return;
+  const { fx, fy } = editorMinimapPointToFraction(e.clientX, e.clientY);
+  jumpToEditorMinimapPoint(fx, fy, false);
+});
+function endEditorMinimapDrag(e) {
+  if (!editorMinimapDragging) return;
+  editorMinimapDragging = false;
+  try { editorMinimapWidget.releasePointerCapture(e.pointerId); } catch {}
+}
+editorMinimapWidget.addEventListener('pointerup', endEditorMinimapDrag);
+editorMinimapWidget.addEventListener('pointercancel', endEditorMinimapDrag);
+
+// ✅ ミニマップ上でのホイール操作で、エディタ本体を直接スクロールできる
+editorMinimapWidget.addEventListener('wheel', e => {
+  e.preventDefault();
+  const outer  = document.querySelector('.grid-editor-wrap');
+  const mainEl = document.querySelector('.editor-main');
+  const gridEl = document.getElementById('grid-editor');
+  if (!outer || !mainEl || !gridEl || !editorMinimapInfo) return;
+
+  const { canvasW, canvasH } = editorMinimapInfo;
+  const scrollW = outer.scrollWidth;
+  const scaleX  = scrollW > outer.clientWidth ? scrollW / canvasW : 0;
+  const scaleY  = gridEl.getBoundingClientRect().height / canvasH;
+
+  if (scaleX > 0) outer.scrollBy({ left: e.deltaX * scaleX, behavior: 'instant' });
+  mainEl.scrollBy({ top: e.deltaY * scaleY, behavior: 'instant' });
+}, { passive: false });
+
+let editorMinimapUpdateQueued = false;
+function queueEditorMinimapUpdate() {
+  if (editorMinimapUpdateQueued) return;
+  editorMinimapUpdateQueued = true;
+  requestAnimationFrame(() => { editorMinimapUpdateQueued = false; updateEditorMinimapViewport(); });
+}
+document.addEventListener('scroll', e => {
+  if (e.target.classList?.contains('grid-editor-wrap') || e.target.classList?.contains('editor-main')) {
+    queueEditorMinimapUpdate();
+  }
+}, { passive: true, capture: true });
+window.addEventListener('resize', queueEditorMinimapUpdate);
 
 function updateStats() {
   assignLabels();

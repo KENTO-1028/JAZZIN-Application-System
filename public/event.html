@@ -86,18 +86,32 @@ body { min-height:100dvh; }
   box-shadow: 0 6px 20px rgba(0,0,0,0.35);
   display: none;
   opacity: 0;
-  transition: opacity 180ms ease;
+  transition: opacity 180ms ease, transform 120ms ease;
+  transform-origin: top right;
   cursor: grab;
   touch-action: none;
 }
 .seatmap-minimap:active { cursor: grabbing; }
 .seatmap-minimap.visible { display: block; }
 .seatmap-minimap.shown   { opacity: 1; }
+.seatmap-minimap-toprow {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 6px; margin-bottom: 4px;
+}
 .seatmap-minimap-label {
   font-family: var(--font-body); font-size: 0.56rem; font-weight:600;
   letter-spacing: 0.08em; text-transform: uppercase;
-  color: var(--text-tertiary); margin-bottom: 4px; text-align:center;
+  color: var(--text-tertiary);
 }
+.seatmap-minimap-zoom { display:flex; gap:3px; }
+.minimap-zoom-btn {
+  width: 18px; height: 18px; line-height: 16px; padding: 0;
+  border-radius: 4px; border: 1px solid var(--border-strong,rgba(255,255,255,0.15));
+  background: rgba(255,255,255,0.06); color: var(--text-secondary,#9ab);
+  font-size: 0.7rem; font-weight:700; cursor: pointer; text-align:center;
+}
+.minimap-zoom-btn:hover  { background: rgba(0,212,255,0.15); color: var(--accent-1); }
+.minimap-zoom-btn:active { transform: scale(0.9); }
 .seatmap-minimap-stage {
   height: 3px; border-radius: 2px; margin-bottom: 3px;
   background: linear-gradient(90deg, transparent, var(--accent-1), transparent);
@@ -272,8 +286,14 @@ body { min-height:100dvh; }
 </header>
 <div id="toast"></div>
 
-<div class="seatmap-minimap" id="seatmap-minimap" title="タップで移動">
-  <div class="seatmap-minimap-label">現在地</div>
+<div class="seatmap-minimap" id="seatmap-minimap" title="ドラッグで移動 / ホイールでスクロール">
+  <div class="seatmap-minimap-toprow">
+    <span class="seatmap-minimap-label">現在地</span>
+    <div class="seatmap-minimap-zoom">
+      <button type="button" class="minimap-zoom-btn" id="minimap-zoom-out" title="縮小">－</button>
+      <button type="button" class="minimap-zoom-btn" id="minimap-zoom-in" title="拡大">＋</button>
+    </div>
+  </div>
   <div class="seatmap-minimap-stage" id="minimap-stage-hint"></div>
   <div class="seatmap-minimap-canvas-wrap">
     <canvas id="minimap-canvas"></canvas>
@@ -660,8 +680,8 @@ function renderMinimap(seatData, meta, totalRows, totalCols) {
   seatData.forEach(s => seatMap.set(`${s.row_num},${s.col_num}`, s));
 
   // ✅ 縮小表示のセルサイズ：列数が多いほど小さく、最大でも見やすい範囲に収める
-  const MAX_W = 96, MAX_H = 96, MIN_CELL = 2, MAX_CELL = 7;
-  const cellPx = Math.max(MIN_CELL, Math.min(MAX_CELL, Math.floor(Math.min(MAX_W / totalCols, MAX_H / totalRows))));
+  const MAX_W = 132, MAX_H = 132, MIN_CELL = 1.2, MAX_CELL = 9;
+  const cellPx = Math.max(MIN_CELL, Math.min(MAX_CELL, Math.min(MAX_W / totalCols, MAX_H / totalRows)));
   const dpr = window.devicePixelRatio || 1;
   const canvasW = cellPx * totalCols;
   const canvasH = cellPx * totalRows;
@@ -800,7 +820,25 @@ function clientPointToMinimapFraction(clientX, clientY) {
 const minimapWidget = document.getElementById('seatmap-minimap');
 let minimapDragging = false;
 
+// ✅ ミニマップ自体の拡大縮小（特に「たくさん縮小」できるよう下限を低めに設定）
+const MINIMAP_ZOOM_MIN = 0.4, MINIMAP_ZOOM_MAX = 1.8, MINIMAP_ZOOM_STEP = 0.15;
+let minimapZoom = 1;
+function applyMinimapZoom() {
+  minimapWidget.style.transform = `scale(${minimapZoom})`;
+}
+document.getElementById('minimap-zoom-in').addEventListener('click', e => {
+  e.stopPropagation();
+  minimapZoom = Math.min(MINIMAP_ZOOM_MAX, +(minimapZoom + MINIMAP_ZOOM_STEP).toFixed(2));
+  applyMinimapZoom();
+});
+document.getElementById('minimap-zoom-out').addEventListener('click', e => {
+  e.stopPropagation();
+  minimapZoom = Math.max(MINIMAP_ZOOM_MIN, +(minimapZoom - MINIMAP_ZOOM_STEP).toFixed(2));
+  applyMinimapZoom();
+});
+
 minimapWidget.addEventListener('pointerdown', e => {
+  if (e.target.closest('.minimap-zoom-btn')) return; // ズームボタン操作はドラッグ扱いしない
   minimapDragging = true;
   minimapWidget.setPointerCapture(e.pointerId);
   const { fx, fy } = clientPointToMinimapFraction(e.clientX, e.clientY);
