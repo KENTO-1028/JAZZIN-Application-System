@@ -93,6 +93,47 @@ export async function lockSeats(eventId, seatIds) {
   return data; // boolean
 }
 
+// ✅ 仮ロック（キープ）を明示的に解除する。
+//    予約フォームをキャンセルした時や、選択を取り消した時に呼ぶことで、
+//    5分間の自動失効を待たずに他のお客様がすぐその座席を選べるようにする。
+//    自分（同じSESSION_TOKEN）がロックした座席だけが対象。
+// ✅ 仮ロック（キープ）を明示的に解除する。
+//    予約フォームをキャンセルした時や、選択を取り消した時に呼ぶことで、
+//    5分間の自動失効を待たずに他のお客様がすぐその座席を選べるようにする。
+//    自分（同じSESSION_TOKEN）がロックした座席だけが対象。
+export async function releaseSeatLock(eventId, seatIds) {
+  if (!seatIds || seatIds.length === 0) return { success: true };
+  const { data, error } = await supabase.rpc('release_seat_lock', {
+    p_event_id:      eventId,
+    p_seat_ids:      seatIds,
+    p_session_token: SESSION_TOKEN,
+  });
+  if (error) throw error;
+  return data;
+}
+
+// ✅ タブを閉じる／ページ離脱時の保険。async処理が完了を待たれない場面でも
+//    fetchのkeepaliveオプションでリクエストを送り切れるようにする。
+export function releaseSeatLockBeacon(eventId, seatIds) {
+  if (!seatIds || seatIds.length === 0) return;
+  try {
+    fetch(`${SUPABASE_URL}/rest/v1/rpc/release_seat_lock`, {
+      method: 'POST',
+      keepalive: true,
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey':        SUPABASE_ANON,
+        'Authorization': `Bearer ${SUPABASE_ANON}`,
+      },
+      body: JSON.stringify({
+        p_event_id:      eventId,
+        p_seat_ids:      seatIds,
+        p_session_token: SESSION_TOKEN,
+      }),
+    });
+  } catch { /* ベストエフォートなので失敗しても何もしない */ }
+}
+
 export async function confirmReservation({
   eventId, seatIds, guestName, guestEmail, guestPhone, notes,
   guestNameKana, guestGender, guestAgeRange

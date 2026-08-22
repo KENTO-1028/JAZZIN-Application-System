@@ -71,7 +71,7 @@
   --transition: 110ms ease;
   /* ✅ 固定 1.5rem → 画面幅に応じて滑らかに変化するfluid値に変更。
      ブレークポイントの境目で急に余白が変わる「詰まって見える」問題を解消。 */
-  --px:   clamp(1.5rem, 6.5vw, 1.75rem);
+  --px:   clamp(1.75rem, 6vw, 2rem);
   --header-h: 52px;
   --max-w: 960px;
 

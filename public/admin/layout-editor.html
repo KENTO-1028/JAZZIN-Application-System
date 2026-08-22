@@ -441,10 +441,13 @@ function applyDisplaySettings() {
   const effSize = displaySettings.seatSize * editorZoom;
   const effGap  = displaySettings.seatGap  * editorZoom;
   grid.style.gap = `${effGap}px`;
-  // update cell sizes
+  // update cell sizes（文字サイズも一緒に、下限なしで完全比例させる。読めない小ささでは非表示）
+  const fontSize = effSize < 14 ? 0 : effSize * 0.28;
   document.querySelectorAll('.editor-cell').forEach(c => {
-    c.style.width  = `${effSize}px`;
-    c.style.height = `${effSize}px`;
+    c.style.width    = `${effSize}px`;
+    c.style.height   = `${effSize}px`;
+    c.style.fontSize = `${fontSize}px`;
+    c.style.overflow = 'hidden';
   });
   // stage indicator height（ズームの影響は受けない：レイアウト全体の目印として常に一定）
   ['stage-indicator-top','stage-indicator-bottom'].forEach(id => {
@@ -822,9 +825,12 @@ function renderGrid() {
       const effSize = displaySettings.seatSize * editorZoom;
       const effGap  = displaySettings.seatGap  * editorZoom;
       gridEl.style.gap = `${effGap}px`;
+      const fontSize = effSize < 14 ? 0 : effSize * 0.28;
       document.querySelectorAll('.editor-cell').forEach(c => {
-        c.style.width  = `${effSize}px`;
-        c.style.height = `${effSize}px`;
+        c.style.width    = `${effSize}px`;
+        c.style.height   = `${effSize}px`;
+        c.style.fontSize = `${fontSize}px`;
+        c.style.overflow = 'hidden';
       });
     }
   });
@@ -874,7 +880,8 @@ function renderEditorMinimap() {
   const widget = document.getElementById('editor-minimap');
   if (!canvas || !widget || !grid.length) return;
 
-  const MAX_W = 132, MAX_H = 132, MIN_CELL = 1.2, MAX_CELL = 9;
+  const z = typeof editorMinimapZoom === 'number' ? editorMinimapZoom : 1;
+  const MAX_W = 132 * z, MAX_H = 132 * z, MIN_CELL = 1.2, MAX_CELL = 9 * z;
   const cellPx = Math.max(MIN_CELL, Math.min(MAX_CELL, Math.min(MAX_W / cols, MAX_H / rows)));
   const dpr = window.devicePixelRatio || 1;
   const canvasW = cellPx * cols;
@@ -1020,7 +1027,8 @@ let editorMinimapPinchStartDist = null, editorMinimapPinchStartZoom = null;
 const EDITOR_MINIMAP_ZOOM_MIN = 1, EDITOR_MINIMAP_ZOOM_MAX = 2, EDITOR_MINIMAP_ZOOM_STEP = 0.15;
 let editorMinimapZoom = 1;
 function applyEditorMinimapZoom() {
-  editorMinimapWidget.style.transform = `scale(${editorMinimapZoom})`;
+  renderEditorMinimap();
+  requestAnimationFrame(updateEditorMinimapViewport);
 }
 document.getElementById('editor-minimap-zoom-in').addEventListener('click', e => {
   e.stopPropagation();

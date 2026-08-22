@@ -438,7 +438,7 @@ body { min-height:100dvh; }
 
 <script type="module">
 import {
-  supabase, fetchEventDetail, fetchSeats, lockSeats, confirmReservation,
+  supabase, fetchEventDetail, fetchSeats, lockSeats, releaseSeatLock, releaseSeatLockBeacon, confirmReservation,
   subscribeSeats, formatDate, formatPrice, SeatStatus
 } from '/core/supabase.js';
 
@@ -468,7 +468,12 @@ function updateSeatSizeVars(size, gap) {
     document.head.appendChild(s);
     return s;
   })();
-  seatStyle.textContent = `.seat { width:${size}px !important; height:${size}px !important; font-size:${Math.max(6, size * 0.26)}px !important; letter-spacing:-0.02em; }
+  // ✅ 文字サイズは座席サイズに完全比例させる（下限を設けない）。
+  //    down-scale時に「文字だけ最小6px」のような下限があると、
+  //    座席枠より文字が大きくなりはみ出すため、下限は撤廃。
+  //    代わりに、読めないほど小さくなったら（14px未満）文字自体を非表示にする。
+  const fontSize = size < 14 ? 0 : size * 0.26;
+  seatStyle.textContent = `.seat { width:${size}px !important; height:${size}px !important; font-size:${fontSize}px !important; letter-spacing:-0.02em; overflow:hidden; }
 .seat-placeholder { width:${size}px !important; height:${size}px !important; visibility:hidden; }`;
 }
 
@@ -728,11 +733,13 @@ function renderSeats(seatData, meta) {
 //    - タップ/クリックでその位置へジャンプできる
 // ══════════════════════════════════════════════════════════════
 let minimapGridInfo = null; // { totalRows, totalCols, cellPx, canvasW, canvasH }
+let lastMinimapArgs  = null; // { seatData, meta, totalRows, totalCols } — ズーム変更時の再描画用
 
 function renderMinimap(seatData, meta, totalRows, totalCols) {
   const canvas = document.getElementById('minimap-canvas');
   const widget = document.getElementById('seatmap-minimap');
   if (!canvas || !widget) return;
+  lastMinimapArgs = { seatData, meta, totalRows, totalCols };
 
   const aisles    = new Set((meta?.aisles    || []).map(a => `${a.row},${a.col}`));
   const entrances = new Set((meta?.entrances || []).map(e => `${e.row},${e.col}`));
@@ -741,7 +748,10 @@ function renderMinimap(seatData, meta, totalRows, totalCols) {
   seatData.forEach(s => seatMap.set(`${s.row_num},${s.col_num}`, s));
 
   // ✅ 縮小表示のセルサイズ：列数が多いほど小さく、最大でも見やすい範囲に収める
-  const MAX_W = 132, MAX_H = 132, MIN_CELL = 1.2, MAX_CELL = 9;
+  //    minimapZoom（ミニマップ自体の表示サイズ）はここに反映し、
+  //    canvasを実際に大きい解像度で描き直すことで拡大時のボケを防ぐ
+  const z = typeof minimapZoom === 'number' ? minimapZoom : 1;
+  const MAX_W = 132 * z, MAX_H = 132 * z, MIN_CELL = 1.2, MAX_CELL = 9 * z;
   const cellPx = Math.max(MIN_CELL, Math.min(MAX_CELL, Math.min(MAX_W / totalCols, MAX_H / totalRows)));
   const dpr = window.devicePixelRatio || 1;
   const canvasW = cellPx * totalCols;
@@ -903,10 +913,14 @@ let minimapPinchStartDist = null, minimapPinchStartZoom = null;
 
 // ✅ ミニマップ自体の「表示サイズ」変更（座席表そのもののズームとは別物）。
 //    デフォルト(100%)より小さくはできない＝拡大のみ許可し、拡大後は100%まで戻せる。
+//    ※ canvasをtransform:scaleで引き伸ばすとボケるため、実際に大きい解像度で描き直す
 const MINIMAP_ZOOM_MIN = 1, MINIMAP_ZOOM_MAX = 2, MINIMAP_ZOOM_STEP = 0.15;
 let minimapZoom = 1;
 function applyMinimapZoom() {
-  minimapWidget.style.transform = `scale(${minimapZoom})`;
+  if (lastMinimapArgs) {
+    renderMinimap(lastMinimapArgs.seatData, lastMinimapArgs.meta, lastMinimapArgs.totalRows, lastMinimapArgs.totalCols);
+    requestAnimationFrame(updateMinimapViewport);
+  }
 }
 document.getElementById('minimap-zoom-in').addEventListener('click', e => {
   e.stopPropagation();
@@ -1121,7 +1135,9 @@ function startLockTimer() {
       clearInterval(lockTimer);
       closeFormModal();
       showToast('仮ロックが切れました。再度選んでください');
+      const idsToRelease = [...selectedIds];
       selectedIds.clear();
+      releaseSeatLock(EVENT_ID, idsToRelease).catch(() => {}); // 期限切れなのでベストエフォート
       fetchSeats(EVENT_ID).then(s => { seats = s; renderSeats(s, layoutMeta); updateBookingPanel(); });
       timerEl.style.display = 'none';
     }
@@ -1148,8 +1164,24 @@ function closeFormModal() {
   document.getElementById('form-modal').style.display = 'none';
 }
 
-document.addEventListener('click', e => {
-  if (e.target.id === 'btn-modal-cancel') closeFormModal();
+// ✅ フォームをキャンセルしたら、選択解除と同時に座席のキープ（仮ロック）も解除する。
+//    5分経つのを待たず、すぐに他のお客様がその座席を選べるようにするため。
+document.addEventListener('click', async e => {
+  if (e.target.id !== 'btn-modal-cancel') return;
+  closeFormModal();
+  if (lockTimer) { clearInterval(lockTimer); lockTimer = null; }
+  const timerEl = document.getElementById('lock-timer-el');
+  if (timerEl) timerEl.style.display = 'none';
+
+  const idsToRelease = [...selectedIds];
+  selectedIds.clear();
+  updateBookingPanel();
+  try {
+    await releaseSeatLock(EVENT_ID, idsToRelease);
+  } catch (err) {
+    console.error('[JAZZIN] release_seat_lock error:', err);
+  }
+  fetchSeats(EVENT_ID).then(s => { seats = s; renderSeats(s, layoutMeta); });
 });
 
 ['f-last-name', 'f-first-name', 'f-last-kana', 'f-first-kana', 'f-email'].forEach(id => {
@@ -1252,6 +1284,26 @@ async function init() {
     layoutMeta = meta;
     renderPage(ev, seatData || [], meta);
     subscribeSeats(EVENT_ID, patchSeat);
+
+    // ✅ 期限切れの仮ロックを定期的に掃除する（誰も操作しなくても自動で解放され、
+    //    他の閲覧者の画面にもリアルタイムで反映される）。
+    //    fetchSeats自体が「期限切れロックをavailableに戻す」処理を内包しているため、
+    //    これを定期的に呼ぶだけで良い。
+    setInterval(() => {
+      fetchSeats(EVENT_ID).then(s => {
+        seats = s;
+        renderSeats(s, layoutMeta);
+      }).catch(() => {});
+    }, 45000);
+
+    // ✅ タブを閉じる・ページ離脱する際、キープ中の座席があればベストエフォートで解放する
+    const releaseOnLeave = () => {
+      if (lockTimer && selectedIds.size > 0) {
+        releaseSeatLockBeacon(EVENT_ID, [...selectedIds]);
+      }
+    };
+    window.addEventListener('pagehide', releaseOnLeave);
+    window.addEventListener('beforeunload', releaseOnLeave);
   } catch (err) {
     console.error('[JAZZIN] init error:', err);
     document.getElementById('page-content').innerHTML =
