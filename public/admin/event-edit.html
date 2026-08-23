@@ -319,6 +319,7 @@ body { min-height:100dvh; }
             <div class="form-group">
               <label class="form-label">定員（席数）</label>
               <input type="number" class="form-input" id="f-capacity" placeholder="50" min="1">
+              <p id="actual-seat-count" style="font-size:0.72rem;color:var(--text-tertiary);margin-top:0.3rem"></p>
             </div>
           </div>
           <div class="form-group">
@@ -489,7 +490,10 @@ function collectFormData() {
     doors_open_at: $('f-doors-open-tbd')?.checked ? null : ($('f-doors-open')?.value || null),
     description:   $('f-description')?.value.trim() || null,
     hero_image_url:$('f-hero-image')?.value.trim() || null,
-    // ✅ hero_crop_* はDBカラムが存在しないため除外（400エラーの原因だったため削除）
+    // ✅ トリミング位置もDBに保存する（対応カラムを追加済み）
+    hero_crop_x:      parseFloat($('f-hero-crop-x')?.value)     || 0,
+    hero_crop_y:       parseFloat($('f-hero-crop-y')?.value)     || 0,
+    hero_crop_scale:   parseFloat($('f-hero-crop-scale')?.value) || 1,
     venue_name:    $('f-venue-name')?.value.trim() || '',
     venue_address: $('f-venue-address')?.value.trim() || null,
     venue_lat:     parseFloat($('f-lat')?.value) || null,
@@ -647,7 +651,7 @@ async function checkAuth() {
 async function loadEvent(id) {
   const { data, error } = await supabase
     .from('events')
-    .select('id, title, description, performers, timetable, venue_name, venue_address, venue_lat, venue_lng, event_at, doors_open_at, hero_image_url, ticket_price, notes, capacity, status, publish_at')
+    .select('id, title, description, performers, timetable, venue_name, venue_address, venue_lat, venue_lng, event_at, doors_open_at, hero_image_url, hero_crop_x, hero_crop_y, hero_crop_scale, ticket_price, notes, capacity, status, publish_at')
     .eq('id', id)
     .single();
   if (error) throw error;
@@ -679,9 +683,6 @@ async function saveEvent() {
     };
     // ✅ DB に存在しないキーを必ず削除
     delete payload._savedAt;
-    delete payload.hero_crop_x;
-    delete payload.hero_crop_y;
-    delete payload.hero_crop_scale;
 
     let savedId = EVENT_ID;
 
@@ -751,6 +752,17 @@ async function init() {
       updateHeaderStatus(dbData.status);
       $('btn-go-layout').href = `/admin/layout-editor.html?event_id=${EVENT_ID}`;
       $('seat-layout-link').style.display = 'block';
+
+      // ✅ 定員(手入力)とは別に、実際に座席レイアウトエディタで
+      //    設定されている座席数を正確に表示する（情報の食い違い防止）
+      const { count: actualSeatCount } = await supabase
+        .from('seats')
+        .select('id', { count: 'exact', head: true })
+        .eq('event_id', EVENT_ID);
+      const seatCountEl = $('actual-seat-count');
+      if (seatCountEl) {
+        seatCountEl.textContent = `現在のレイアウトに設定されている座席数：${actualSeatCount ?? 0}席`;
+      }
     } else {
       $('page-title').innerHTML = 'イベント作成 <span class="new-badge">NEW</span>';
       $('page-sub').textContent = 'Create New Event';
@@ -764,11 +776,16 @@ async function init() {
       const draftDate = new Date(stored._savedAt).toLocaleString('ja-JP');
       $('draft-banner-msg').textContent = `前回の未保存の変更（${draftDate}）が見つかりました`;
       $('draft-banner').style.display = 'flex';
+    }
 
-      // デフォルトは下書きを表示
-      populateForm(stored);
-    } else if (dbData) {
+    // ✅ 既存イベントを開いた時は、必ず現在のDBの内容をそのまま表示する。
+    //    下書きがあっても自動では適用しない（実際のデータと食い違って見える事故を防ぐため）。
+    //    復元したい場合は上のバナーから明示的に「復元する」を押してもらう。
+    if (dbData) {
       populateForm(dbData);
+    } else if (stored) {
+      // 新規作成中の下書きは、まだDBに何も無いのでそのまま表示してよい
+      populateForm(stored);
     } else {
       // 新規: デフォルト値
       populateForm({ status: 'draft', ticket_price: 3000 });

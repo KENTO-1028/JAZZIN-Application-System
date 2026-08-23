@@ -38,7 +38,7 @@ body { min-height:100dvh; }
 .tool-icon { font-size:1rem; width:20px; text-align:center; flex-shrink:0; }
 
 /* Grid editor */
-.grid-editor-wrap { overflow-x:auto; margin-bottom:1rem; touch-action:pan-x pan-y; }
+.grid-editor-wrap { overflow-x:auto; margin-bottom:1rem; touch-action:none; }
 
 /* ── Minimap（座席エディタでも現在地を確認できるようにする） ── */
 .editor-minimap {
@@ -192,9 +192,11 @@ body { min-height:100dvh; }
     padding:1rem; display:grid;
     grid-template-columns:repeat(auto-fill,minmax(180px,1fr));
     gap:0.75rem;
+    /* ✅ ツール設定はグリッドの下に回す。モバイルで最初に目に入るのは座席表そのもの */
+    order: 2;
   }
   .editor-sidebar .sidebar-title { grid-column:1/-1; margin-top:0.5rem; }
-  .editor-main { padding:1rem; }
+  .editor-main { padding:1rem; order: 1; }
   .grid-editor-wrap { overflow-x:auto; -webkit-overflow-scrolling:touch; }
 }
 </style>
@@ -441,6 +443,8 @@ function applyDisplaySettings() {
   const effSize = displaySettings.seatSize * editorZoom;
   const effGap  = displaySettings.seatGap  * editorZoom;
   grid.style.gap = `${effGap}px`;
+  // ✅ グリッドの列幅もセルサイズと必ず一致させる（ズレると隙間・重なりの原因になる）
+  if (cols) grid.style.gridTemplateColumns = `repeat(${cols}, ${effSize}px)`;
   // update cell sizes（文字サイズも一緒に、下限なしで完全比例させる。読めない小ささでは非表示）
   const fontSize = effSize < 14 ? 0 : effSize * 0.28;
   document.querySelectorAll('.editor-cell').forEach(c => {
@@ -773,7 +777,10 @@ function assignLabels() {
 // ── Render grid ──────────────────────────────────────────────
 function renderGrid() {
   const el = document.getElementById('grid-editor');
-  el.style.gridTemplateColumns = `repeat(${cols}, 40px)`;
+  // ✅ ズーム倍率を反映した実サイズをグリッドの列幅にも使う
+  //    （固定40pxのままだと座席セル自体の幅とズレて、ズーム時に隙間や重なりが発生していた）
+  const effSizeForTrack = (displaySettings.seatSize || 36) * (typeof editorZoom === 'number' ? editorZoom : 1);
+  el.style.gridTemplateColumns = `repeat(${cols}, ${effSizeForTrack}px)`;
   el.innerHTML = '';
 
   for (let r = 1; r <= rows; r++) {
@@ -791,20 +798,34 @@ function renderGrid() {
         cell.style.opacity = '0.85';
       }
 
-      cell.addEventListener('mousedown', e => {
+      // ✅ Pointer Eventsに統一（mousedown/mouseoverはマウス専用で、
+      //    タッチではドラッグ描画が一切機能しなかったための修正）
+      cell.addEventListener('pointerdown', e => {
+        if (e.pointerType === 'mouse' && e.button !== 0) return;
         isDragging = true;
         dragType   = currentTool;
         paintCell(r, c);
         e.preventDefault();
       });
-      cell.addEventListener('mouseover', () => {
-        if (isDragging) paintCell(r, c);
-      });
       el.appendChild(cell);
     }
   }
 
-  document.addEventListener('mouseup', () => { isDragging = false; }, { once: false });
+  // ✅ ドラッグ中の移動先セルを elementFromPoint で判定する。
+  //    タッチのドラッグ中は pointermove が最初にpointerdownしたセルに
+  //    集中してしまい、mouseover相当の「乗り移り」検出が効かないため。
+  el.addEventListener('pointermove', e => {
+    if (!isDragging) return;
+    const target = document.elementFromPoint(e.clientX, e.clientY);
+    const cellEl = target?.closest('.editor-cell');
+    if (!cellEl) return;
+    const rr = parseInt(cellEl.dataset.row, 10);
+    const cc = parseInt(cellEl.dataset.col, 10);
+    if (!isNaN(rr) && !isNaN(cc)) paintCell(rr, cc);
+  });
+
+  document.addEventListener('pointerup',     () => { isDragging = false; }, { once: false });
+  document.addEventListener('pointercancel', () => { isDragging = false; }, { once: false });
 
   // Stage indicators
   const top    = document.getElementById('stage-indicator-top');

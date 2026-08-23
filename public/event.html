@@ -1011,12 +1011,17 @@ if (seatmapOuterEl) {
     if (e.pointerType !== 'touch') return;
     seatPointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (seatPointers.size === 2) {
-      seatmapOuterEl.setPointerCapture(e.pointerId);
+      e.preventDefault();
+      // ✅ 2本の指を両方ともキャプチャする（片方だけだと途中でズレて
+      //    認識が不安定になっていた）
+      seatPointers.forEach((_, id) => {
+        try { seatmapOuterEl.setPointerCapture(id); } catch {}
+      });
       const pts = [...seatPointers.values()];
       seatPinchStartDist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
       seatPinchStartZoom = seatZoom;
     }
-  });
+  }, { passive: false });
   seatmapOuterEl.addEventListener('pointermove', e => {
     if (!seatPointers.has(e.pointerId)) return;
     seatPointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
@@ -1029,6 +1034,7 @@ if (seatmapOuterEl) {
   }, { passive: false });
   function endSeatPinch(e) {
     seatPointers.delete(e.pointerId);
+    try { seatmapOuterEl.releasePointerCapture(e.pointerId); } catch {}
     if (seatPointers.size < 2) seatPinchStartDist = null;
   }
   seatmapOuterEl.addEventListener('pointerup', endSeatPinch);
