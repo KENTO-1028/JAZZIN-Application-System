@@ -696,10 +696,7 @@ function renderSeats(seatData, meta) {
         el.dataset.status = selectedIds.has(s.id) ? SeatStatus.SELECTED : s.status;
         el.title          = s.label;
         el.textContent    = s.label;
-        el.addEventListener('click', () => {
-          if (suppressNextSeatClick) { suppressNextSeatClick = false; return; }
-          toggleSeat(s);
-        });
+        el.addEventListener('click', () => toggleSeat(s));
         grid.appendChild(el);
       } else if (entrances.has(key)) {
         const el = document.createElement('div');
@@ -1001,83 +998,6 @@ minimapWidget.addEventListener('wheel', e => {
   if (outer.scrollWidth > outer.clientWidth) outer.scrollBy({ left: stepX, behavior: 'auto' });
   window.scrollBy({ top: stepY, behavior: 'auto' });
 }, { passive: false });
-
-// ✅ 座席表そのものの上での操作
-//    ・1本指タップ＝座席選択（従来通り）、1本指ドラッグ＝パン（JSで実装）
-//    ・2本指ピンチ、Ctrl/Cmd+ホイールでズーム
-//    ※ ネイティブのタッチスクロールと共存させる方式は実機で不安定だったため、
-//      すべての指の動きをJSで判定する方式に変更した
-const seatmapOuterEl = document.querySelector('.seatmap-outer');
-let suppressNextSeatClick = false; // パン操作の指離しが誤って座席タップ扱いされないようにする
-
-if (seatmapOuterEl) {
-  const seatPointers = new Map(); // id -> {x,y,startX,startY,moved}
-  let seatPinchStartDist = null, seatPinchStartZoom = null;
-  const PAN_THRESHOLD = 8; // これ未満の移動は「タップ」として座席選択に譲る
-
-  seatmapOuterEl.addEventListener('pointerdown', e => {
-    if (e.pointerType !== 'touch') return;
-    seatPointers.set(e.pointerId, {
-      x: e.clientX, y: e.clientY,
-      startX: e.clientX, startY: e.clientY,
-      moved: false,
-    });
-
-    if (seatPointers.size === 2) {
-      // ✅ 2本の指を両方ともキャプチャする（片方だけだと途中でズレて認識が不安定になる）
-      seatPointers.forEach((_, id) => {
-        try { seatmapOuterEl.setPointerCapture(id); } catch {}
-      });
-      const pts = [...seatPointers.values()];
-      seatPinchStartDist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
-      seatPinchStartZoom = seatZoom;
-    }
-  }, { passive: false });
-
-  seatmapOuterEl.addEventListener('pointermove', e => {
-    const p = seatPointers.get(e.pointerId);
-    if (!p) return;
-    const prevX = p.x, prevY = p.y;
-    p.x = e.clientX; p.y = e.clientY;
-
-    if (seatPointers.size === 2 && seatPinchStartDist) {
-      e.preventDefault();
-      const pts = [...seatPointers.values()];
-      const dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
-      applySeatZoom(seatPinchStartZoom * (dist / seatPinchStartDist));
-      return;
-    }
-
-    if (seatPointers.size === 1) {
-      const totalMove = Math.hypot(e.clientX - p.startX, e.clientY - p.startY);
-      if (!p.moved && totalMove < PAN_THRESHOLD) return; // まだタップの可能性を残す
-      p.moved = true;
-      e.preventDefault();
-      const dx = e.clientX - prevX, dy = e.clientY - prevY;
-      if (seatmapOuterEl.scrollWidth > seatmapOuterEl.clientWidth) {
-        seatmapOuterEl.scrollLeft -= dx;
-      }
-      window.scrollBy({ top: -dy, behavior: 'instant' });
-    }
-  }, { passive: false });
-
-  function endSeatTouch(e) {
-    const p = seatPointers.get(e.pointerId);
-    if (p?.moved) suppressNextSeatClick = true; // ドラッグ（パン）だったのでタップ扱いにしない
-    seatPointers.delete(e.pointerId);
-    try { seatmapOuterEl.releasePointerCapture(e.pointerId); } catch {}
-    if (seatPointers.size < 2) seatPinchStartDist = null;
-  }
-  seatmapOuterEl.addEventListener('pointerup', endSeatTouch);
-  seatmapOuterEl.addEventListener('pointercancel', endSeatTouch);
-
-  seatmapOuterEl.addEventListener('wheel', e => {
-    if (!(e.ctrlKey || e.metaKey)) return; // 通常のスクロールは邪魔しない
-    e.preventDefault();
-    const factor = e.deltaY < 0 ? 1.08 : 0.92;
-    applySeatZoom(seatZoom * factor);
-  }, { passive: false });
-}
 
 // スクロール・リサイズのたびに現在地の枠を更新（rAFで間引き）
 let minimapUpdateQueued = false;

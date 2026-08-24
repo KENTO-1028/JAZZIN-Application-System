@@ -285,10 +285,6 @@ p  { color:var(--fg-2); line-height:1.75; }
   overflow-x:auto; overflow-y:visible;
   -webkit-overflow-scrolling:touch; padding-bottom:.5rem;
   overscroll-behavior-x:contain;
-  /* ✅ 1本指のタップ/ドラッグ・2本指ピンチを、すべてJS側で確実に制御する。
-     ネイティブのタッチスクロールと共存させる方式は実機で認識が不安定だったため、
-     ミニマップ・座席レイアウトエディタと同じ「JSが全部処理する」方式に統一した */
-  touch-action: none;
 }
 .seatmap-outer::-webkit-scrollbar { height:3px; }
 .seatmap-outer::-webkit-scrollbar-thumb { background:rgba(255,255,255,.1); border-radius:2px; }
