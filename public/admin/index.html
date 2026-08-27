@@ -10,6 +10,7 @@
 <link rel="stylesheet" href="/ui/style.css">
 <script src="/config.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
 <style>
 /* Admin layout: sidebar + main */
 .admin-layout {
@@ -165,6 +166,7 @@ textarea.form-input { min-height: 80px; resize: vertical; }
     <div class="sidebar-section">管理</div>
     <a href="#events" class="sidebar-link" data-section="events">🎵 イベント</a>
     <a href="#cancellations" class="sidebar-link" data-section="cancellations">🚫 キャンセル申請<span id="cancel-badge" style="display:none;margin-left:6px;background:var(--c-red,#ff6b6b);color:#1a0505;border-radius:10px;padding:1px 7px;font-size:0.7rem;font-weight:700"></span></a>
+    <a href="#reports" class="sidebar-link" data-section="reports">📈 売上・分析</a>
     <div style="margin-top:auto;padding:1rem 1.25rem">
       <button class="btn btn-ghost btn-sm btn-full" id="btn-signout">ログアウト</button>
     </div>
@@ -337,6 +339,27 @@ textarea.form-input { min-height: 80px; resize: vertical; }
       <div id="cancellations-list"></div>
     </div>
 
+    <!-- Reports: sales chart + no-show visibility -->
+    <div id="section-reports" style="display:none">
+      <p class="page-title">売上・分析</p>
+
+      <div class="glass-card" style="padding:1.25rem;margin-bottom:1.5rem">
+        <p class="section-label" style="margin-bottom:1rem">月別売上（当日現金支払い済み分）</p>
+        <div style="position:relative;height:280px">
+          <canvas id="sales-chart"></canvas>
+        </div>
+        <p id="sales-empty" style="display:none;text-align:center;color:var(--text-secondary);font-size:0.85rem;padding:2rem 0">売上データがまだありません</p>
+      </div>
+
+      <div class="glass-card" style="padding:1.25rem">
+        <p class="section-label" style="margin-bottom:0.4rem">ノーショー傾向</p>
+        <p style="font-size:0.78rem;color:var(--text-secondary);margin-bottom:1rem">
+          開催済みイベントで、予約はあったが受付（チェックイン）記録が無い方を、メールアドレス単位で集計しています。
+        </p>
+        <div id="noshow-list"></div>
+      </div>
+    </div>
+
   </main>
 </div>
 
@@ -372,6 +395,7 @@ document.querySelectorAll('[data-section]').forEach(link => {
     document.querySelectorAll('.sidebar-link').forEach(l=>l.classList.remove('active'));
     link.classList.add('active');
     if (sec === 'cancellations') loadCancellationRequests('pending');
+    if (sec === 'reports') loadReports();
   });
 });
 
@@ -1150,6 +1174,100 @@ function openCancelResponseModal(req, approved) {
       sendBtn.disabled = false; sendBtn.textContent = 'この内容で送信する';
     }
   });
+}
+
+// ══════════════════════════════════════════════════════════════
+// ✅ 売上グラフ・ノーショー傾向
+// ══════════════════════════════════════════════════════════════
+let salesChartInstance = null;
+
+async function loadReports() {
+  // 必要なデータをまとめて取得（イベントを跨いだ集計のため）
+  const [{ data: reservations }, { data: checkins }] = await Promise.all([
+    supabase
+      .from('reservations')
+      .select('id, guest_name, guest_email, num_seats, payment_status, status, event_id, event:events(title, event_at, ticket_price)')
+      .neq('status', 'cancelled'),
+    supabase.from('checkins').select('reservation_id'),
+  ]);
+
+  const checkedInIds = new Set((checkins || []).map(c => c.reservation_id));
+  const now = new Date();
+
+  // ── 月別売上（支払い済みのみ） ──────────────────────────────
+  const monthly = {}; // 'YYYY-MM' -> 金額
+  (reservations || []).forEach(r => {
+    if (r.payment_status !== 'paid_cash' || !r.event?.event_at) return;
+    const d = new Date(r.event.event_at);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    monthly[key] = (monthly[key] || 0) + r.num_seats * (r.event.ticket_price || 0);
+  });
+  const months = Object.keys(monthly).sort();
+
+  const chartEl = document.getElementById('sales-chart');
+  const emptyEl = document.getElementById('sales-empty');
+  if (!months.length) {
+    chartEl.style.display = 'none';
+    emptyEl.style.display = 'block';
+  } else {
+    chartEl.style.display = 'block';
+    emptyEl.style.display = 'none';
+    if (salesChartInstance) salesChartInstance.destroy();
+    salesChartInstance = new Chart(chartEl, {
+      type: 'bar',
+      data: {
+        labels: months,
+        datasets: [{
+          label: '売上（円）',
+          data: months.map(m => monthly[m]),
+          backgroundColor: 'rgba(0,212,255,0.5)',
+          borderColor: 'rgba(0,212,255,1)',
+          borderWidth: 1,
+          borderRadius: 4,
+        }],
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          y: { ticks: { color: '#8aa', callback: v => '¥' + v.toLocaleString() }, grid: { color: 'rgba(255,255,255,0.06)' } },
+          x: { ticks: { color: '#8aa' }, grid: { display: false } },
+        },
+      },
+    });
+  }
+
+  // ── ノーショー傾向：開催済みイベントで受付記録が無い予約を、メール単位で集計 ──
+  const noShowByEmail = {}; // email -> { guest_name, count, events: [title,...] }
+  (reservations || []).forEach(r => {
+    if (!r.event?.event_at) return;
+    if (new Date(r.event.event_at) >= now) return; // 開催前は対象外
+    if (checkedInIds.has(r.id)) return; // 受付済みなら対象外
+    const key = r.guest_email;
+    if (!noShowByEmail[key]) noShowByEmail[key] = { guest_name: r.guest_name, guest_email: key, count: 0, events: [] };
+    noShowByEmail[key].count += 1;
+    noShowByEmail[key].events.push(r.event.title);
+  });
+
+  const noShowList = Object.values(noShowByEmail).sort((a, b) => b.count - a.count);
+  const noShowEl = document.getElementById('noshow-list');
+  if (!noShowList.length) {
+    noShowEl.innerHTML = `<p style="text-align:center;color:var(--text-secondary);font-size:0.85rem;padding:1.5rem 0">該当する方はいません</p>`;
+  } else {
+    noShowEl.innerHTML = `
+      <table class="data-table">
+        <thead><tr><th>お名前</th><th>メール</th><th>ノーショー回数</th><th>該当イベント</th></tr></thead>
+        <tbody>
+          ${noShowList.map(n => `
+            <tr>
+              <td>${n.guest_name}</td>
+              <td style="font-size:0.8rem;color:var(--text-secondary)">${n.guest_email}</td>
+              <td><span class="badge ${n.count >= 2 ? 'badge-sold' : ''}">${n.count}回</span></td>
+              <td style="font-size:0.78rem;color:var(--text-secondary)">${n.events.join('、')}</td>
+            </tr>`).join('')}
+        </tbody>
+      </table>`;
+  }
 }
 
 // ── Init ─────────────────────────────────────────────────────
