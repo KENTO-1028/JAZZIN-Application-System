@@ -145,6 +145,9 @@ function renderCard(rsv, expanded = false) {
       <p style="font-size:0.7rem;color:var(--text-secondary)">受付でこのQRをご提示ください</p>
       <a href="/confirm.html?rid=${rsv.id}&token=${rsv.qr_token}&code=${rsv.reservation_code}"
          class="btn btn-ghost btn-sm">予約完了ページを開く</a>
+      ${rsv.status !== 'cancelled' ? `
+      <a href="/cancel-request.html?rid=${rsv.id}&token=${rsv.qr_token}"
+         class="btn btn-ghost btn-sm" style="color:var(--text-tertiary);font-size:0.75rem">予約をキャンセルしたい場合はこちら</a>` : ''}
     </div>`;
 
   // Toggle
@@ -177,7 +180,7 @@ async function loadFromLocal() {
   const ids = saved.map(r => r.id);
   const { data } = await supabase
     .from('reservations')
-    .select(`id, reservation_code, qr_token, guest_name, num_seats, payment_status,
+    .select(`id, reservation_code, qr_token, guest_name, num_seats, payment_status, status,
       event:events(title, event_at, venue_name, ticket_price),
       reservation_seats(seat:seats(label)),
       checkins(id)`)
@@ -203,7 +206,7 @@ async function searchReservations(query) {
 
   let qb = supabase
     .from('reservations')
-    .select(`id, reservation_code, qr_token, guest_name, num_seats, payment_status,
+    .select(`id, reservation_code, qr_token, guest_name, num_seats, payment_status, status,
       event:events(title, event_at, venue_name, ticket_price),
       reservation_seats(seat:seats(label)),
       checkins(id)`);
@@ -234,7 +237,7 @@ const params = new URLSearchParams(location.search);
 const rid = params.get('rid');
 if (rid) {
   supabase.from('reservations')
-    .select(`id, reservation_code, qr_token, guest_name, num_seats, payment_status,
+    .select(`id, reservation_code, qr_token, guest_name, num_seats, payment_status, status,
       event:events(title, event_at, venue_name, ticket_price),
       reservation_seats(seat:seats(label)),
       checkins(id)`)

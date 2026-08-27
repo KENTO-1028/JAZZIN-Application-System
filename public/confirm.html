@@ -189,9 +189,12 @@ body { min-height:100dvh; }
 
     <div class="actions">
       <button class="btn btn-primary btn-full btn-lg" id="btn-save">📥 画像として保存</button>
-      <a id="btn-calendar" href="#" class="btn btn-ghost btn-full" target="_blank">📅 カレンダーに追加</a>
+      <a id="btn-calendar" href="#" class="btn btn-ghost btn-full" target="_blank">📅 Googleカレンダーに追加</a>
+      <a id="btn-calendar-yahoo" href="#" class="btn btn-ghost btn-full" target="_blank">📅 Yahoo!カレンダーに追加</a>
+      <button id="btn-calendar-ics" class="btn btn-ghost btn-full">📅 カレンダーファイル(.ics)をダウンロード</button>
       <a id="btn-map" href="#" class="btn btn-ghost btn-full" target="_blank" style="display:none">🗺 会場をGoogle Mapで開く</a>
       <a href="/mypage.html" class="btn btn-ghost btn-full">🎫 予約マイページ</a>
+      <a id="btn-cancel-request" href="#" class="btn btn-ghost btn-full" style="color:var(--text-tertiary);font-size:0.8rem">予約をキャンセルしたい場合はこちら</a>
       <a href="/" class="btn btn-ghost btn-full">← イベント一覧へ</a>
     </div>
   </div>
@@ -297,19 +300,46 @@ async function loadReservation() {
       mapBtn.style.display = 'flex';
     }
 
-    // カレンダーURL生成
-    let calendarUrl = '';
+    // カレンダーURL生成（Google / Yahoo / .ics 共通データ）
     if (ev?.event_at) {
       const start = new Date(ev.event_at);
       const end   = new Date(start.getTime() + 3*60*60*1000);
-      const fmt   = d => d.toISOString().replace(/[-:]/g,'').replace(/\.\d+/,'');
-      calendarUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(ev.title)}&dates=${fmt(start)}/${fmt(end)}&location=${encodeURIComponent(ev.venue_name||'')}`;
+      const fmtGoogle = d => d.toISOString().replace(/[-:]/g,'').replace(/\.\d+/,'');
+      const calendarUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(ev.title)}&dates=${fmtGoogle(start)}/${fmtGoogle(end)}&location=${encodeURIComponent(ev.venue_name||'')}`;
       document.getElementById('btn-calendar').href = calendarUrl;
+
+      // ✅ Yahoo!カレンダー（st/et は "YYYYMMDDTHHmmss" 形式、UTCの'Z'は付けない仕様）
+      const fmtYahoo = d => d.toISOString().replace(/[-:]/g,'').replace(/\.\d+Z$/,'');
+      const yahooUrl = `https://calendar.yahoo.co.jp/?v=60&view=d&type=20&title=${encodeURIComponent(ev.title)}` +
+        `&st=${fmtYahoo(start)}&et=${fmtYahoo(end)}&in_loc=${encodeURIComponent(ev.venue_name||'')}`;
+      document.getElementById('btn-calendar-yahoo').href = yahooUrl;
+
+      // ✅ .ics ファイル（Apple/Outlookなど、Google・Yahoo以外のカレンダーアプリ向け）
+      document.getElementById('btn-calendar-ics').addEventListener('click', () => {
+        const uid = `${RESERVATION_ID}@jazzin-application-system.pages.dev`;
+        const dtstamp = fmtGoogle(new Date());
+        const icsLines = [
+          'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//JAZZIN//Reservation//JA',
+          'BEGIN:VEVENT',
+          `UID:${uid}`,
+          `DTSTAMP:${dtstamp}`,
+          `DTSTART:${fmtGoogle(start)}`,
+          `DTEND:${fmtGoogle(end)}`,
+          `SUMMARY:${(ev.title||'').replace(/\n/g,' ')}`,
+          `LOCATION:${(ev.venue_name||'').replace(/\n/g,' ')}`,
+          `DESCRIPTION:予約番号 ${rsv.reservation_code}`,
+          'END:VEVENT', 'END:VCALENDAR',
+        ];
+        const blob = new Blob([icsLines.join('\r\n')], { type: 'text/calendar;charset=utf-8' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `${ev.title || 'jazzin-event'}.ics`;
+        document.body.appendChild(a); a.click(); a.remove();
+      });
     }
 
     renderQR(QR_TOKEN);
-
-    // ✅ Gmail API経由でメール送信
+    document.getElementById('btn-cancel-request').href = `/cancel-request.html?rid=${RESERVATION_ID}&token=${QR_TOKEN}`;
     // sessionStorageでのチェックは廃止（サーバー側のDBフラグで確実に1回だけ送信される）
     sendConfirmEmail({
       reservationId:   RESERVATION_ID,
@@ -340,6 +370,7 @@ async function loadReservation() {
     const rsvEl = document.getElementById('rsv-code');
     if (rsvEl) rsvEl.textContent = RSV_CODE || '--';
     renderQR(QR_TOKEN);
+    document.getElementById('btn-cancel-request').href = `/cancel-request.html?rid=${RESERVATION_ID}&token=${QR_TOKEN}`;
   }
 
   document.getElementById('loading').style.display = 'none';

@@ -439,7 +439,7 @@ body { min-height:100dvh; }
 <script type="module">
 import {
   supabase, fetchEventDetail, fetchSeats, lockSeats, releaseSeatLock, releaseSeatLockBeacon, confirmReservation,
-  subscribeSeats, formatDate, formatPrice, SeatStatus
+  subscribeSeats, formatDate, formatPrice, SeatStatus, joinWaitlist
 } from '/core/supabase.js';
 
 const params   = new URLSearchParams(location.search);
@@ -619,6 +619,39 @@ function renderPage(ev, seatData, meta) {
         </div>
       </section>
 
+      ${avail === 0 ? `
+      <section class="section" id="waitlist-section">
+        <p class="section-title">満席のためキャンセル待ち</p>
+        <div class="glass-card" style="padding:1.25rem" id="waitlist-card">
+          <p style="font-size:0.85rem;color:var(--text-secondary);line-height:1.8;margin-bottom:1rem">
+            現在満席です。キャンセルが出た際に、メールでお知らせいたします。<br>
+            ※ 座席を確保するものではなく、先着順のご案内となります。
+          </p>
+          <div class="form-stack" style="display:flex;flex-direction:column;gap:0.7rem">
+            <div class="form-group">
+              <label class="form-label">お名前 *</label>
+              <input type="text" class="form-input" id="wl-name">
+            </div>
+            <div class="form-group">
+              <label class="form-label">メールアドレス *</label>
+              <input type="email" class="form-input" id="wl-email">
+            </div>
+            <div class="form-group">
+              <label class="form-label">電話番号（任意）</label>
+              <input type="tel" class="form-input" id="wl-phone">
+            </div>
+            <div class="form-group">
+              <label class="form-label">希望人数</label>
+              <select class="form-input" id="wl-num-seats">
+                ${Array.from({length:8},(_,i)=>i+1).map(n=>`<option value="${n}">${n}名</option>`).join('')}
+              </select>
+            </div>
+            <button class="btn btn-primary btn-full" id="btn-waitlist-join">キャンセル待ちに登録する</button>
+            <p id="waitlist-result" style="font-size:0.8rem;text-align:center;margin:0"></p>
+          </div>
+        </div>
+      </section>` : ''}
+
       ${ev.venue_address ? `
       <section class="section">
         <p class="section-title">ACCESS</p>
@@ -647,6 +680,34 @@ function renderPage(ev, seatData, meta) {
   }
 
   document.getElementById('booking-panel').style.display = seatData.length > 0 ? 'flex' : 'none';
+
+  // ✅ 満席時：キャンセル待ち登録フォームの配線
+  const wlBtn = document.getElementById('btn-waitlist-join');
+  if (wlBtn) {
+    wlBtn.addEventListener('click', async () => {
+      const name  = document.getElementById('wl-name').value.trim();
+      const email = document.getElementById('wl-email').value.trim();
+      const phone = document.getElementById('wl-phone').value.trim();
+      const numSeats = parseInt(document.getElementById('wl-num-seats').value, 10) || 1;
+      const resultEl = document.getElementById('waitlist-result');
+
+      if (!name || !email || !email.includes('@')) {
+        resultEl.style.color = 'var(--c-red, #ff6b6b)';
+        resultEl.textContent = 'お名前とメールアドレスをご入力ください';
+        return;
+      }
+      wlBtn.disabled = true; wlBtn.textContent = '登録中...';
+      try {
+        await joinWaitlist({ eventId: EVENT_ID, guestName: name, guestEmail: email, guestPhone: phone, numSeats });
+        document.getElementById('waitlist-card').innerHTML =
+          `<p style="text-align:center;padding:1rem 0;color:var(--c-green,#4ade80)">✓ キャンセル待ちに登録しました。<br>空きが出ましたらメールでお知らせします。</p>`;
+      } catch (err) {
+        resultEl.style.color = 'var(--c-red, #ff6b6b)';
+        resultEl.textContent = '登録に失敗しました: ' + (err.message || err);
+        wlBtn.disabled = false; wlBtn.textContent = 'キャンセル待ちに登録する';
+      }
+    });
+  }
 }
 
 // ── Render seats ─────────────────────────────────────────────
@@ -904,11 +965,11 @@ function clientPointToMinimapFraction(clientX, clientY) {
   };
 }
 
-// ✅ タップ／クリックでジャンプ、押したままドラッグすると連続的にその位置へ追従スクロールする
-//    （マウス・タッチどちらもPointer Eventsで統一）
+// ✅ タップ／クリックでジャンプ、押したままドラッグ（スワイプ）すると連続的にその位置へ追従スクロールする
+//    ※ Pointer Events + setPointerCapture の組み合わせが一部実機で不安定だったため、
+//      タッチは touch* イベント、マウスは mouse* イベントで素直に扱う方式にした
 const minimapWidget = document.getElementById('seatmap-minimap');
 let minimapDragging = false;
-const minimapPointers = new Map(); // 2本指ピンチ検出用
 let minimapPinchStartDist = null, minimapPinchStartZoom = null;
 
 // ✅ ミニマップ自体の「表示サイズ」変更（座席表そのもののズームとは別物）。
@@ -937,44 +998,63 @@ document.getElementById('minimap-zoom-out').addEventListener('click', e => {
 document.getElementById('seatzoom-in').addEventListener('click', () => applySeatZoom(seatZoom + SEAT_ZOOM_STEP));
 document.getElementById('seatzoom-out').addEventListener('click', () => applySeatZoom(seatZoom - SEAT_ZOOM_STEP));
 
-minimapWidget.addEventListener('pointerdown', e => {
-  if (e.target.closest('.minimap-zoom-btn')) return; // ズームボタン操作はドラッグ扱いしない
-  minimapWidget.setPointerCapture(e.pointerId);
-  minimapPointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
-
-  if (minimapPointers.size === 2) {
-    // 2本指になった瞬間：ドラッグ移動をやめ、ピンチズームに切り替える
+// ── タッチ操作（スマホ・タブレット） ──────────────────────────
+minimapWidget.addEventListener('touchstart', e => {
+  if (e.target.closest('.minimap-zoom-btn')) return;
+  const touches = e.touches;
+  if (touches.length === 2) {
+    e.preventDefault();
     minimapDragging = false;
-    const pts = [...minimapPointers.values()];
-    minimapPinchStartDist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+    const dx = touches[0].clientX - touches[1].clientX;
+    const dy = touches[0].clientY - touches[1].clientY;
+    minimapPinchStartDist = Math.hypot(dx, dy);
     minimapPinchStartZoom = seatZoom;
-  } else {
+  } else if (touches.length === 1) {
+    e.preventDefault();
     minimapDragging = true;
-    const { fx, fy } = clientPointToMinimapFraction(e.clientX, e.clientY);
+    const { fx, fy } = clientPointToMinimapFraction(touches[0].clientX, touches[0].clientY);
     jumpToMinimapPoint(fx, fy, false); // 最初の一手は瞬時に反応させる
   }
-});
-minimapWidget.addEventListener('pointermove', e => {
-  if (!minimapPointers.has(e.pointerId)) return;
-  minimapPointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+}, { passive: false });
 
-  if (minimapPointers.size === 2 && minimapPinchStartDist) {
-    const pts = [...minimapPointers.values()];
-    const dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+minimapWidget.addEventListener('touchmove', e => {
+  const touches = e.touches;
+  if (touches.length === 2 && minimapPinchStartDist) {
+    e.preventDefault();
+    const dx = touches[0].clientX - touches[1].clientX;
+    const dy = touches[0].clientY - touches[1].clientY;
+    const dist = Math.hypot(dx, dy);
     applySeatZoom(minimapPinchStartZoom * (dist / minimapPinchStartDist));
-  } else if (minimapDragging) {
-    const { fx, fy } = clientPointToMinimapFraction(e.clientX, e.clientY);
+  } else if (touches.length === 1 && minimapDragging) {
+    e.preventDefault();
+    const { fx, fy } = clientPointToMinimapFraction(touches[0].clientX, touches[0].clientY);
     jumpToMinimapPoint(fx, fy, false); // ドラッグ追従はカクつかないよう瞬時に更新
   }
-});
-function endMinimapDrag(e) {
-  minimapPointers.delete(e.pointerId);
-  try { minimapWidget.releasePointerCapture(e.pointerId); } catch {}
-  if (minimapPointers.size < 2) minimapPinchStartDist = null;
-  minimapDragging = minimapPointers.size === 1;
+}, { passive: false });
+
+function endMinimapTouch(e) {
+  minimapDragging = e.touches.length === 1;
+  if (e.touches.length < 2) minimapPinchStartDist = null;
 }
-minimapWidget.addEventListener('pointerup', endMinimapDrag);
-minimapWidget.addEventListener('pointercancel', endMinimapDrag);
+minimapWidget.addEventListener('touchend', endMinimapTouch);
+minimapWidget.addEventListener('touchcancel', () => {
+  minimapDragging = false;
+  minimapPinchStartDist = null;
+});
+
+// ── マウス操作（PC） ──────────────────────────────────────────
+minimapWidget.addEventListener('mousedown', e => {
+  if (e.target.closest('.minimap-zoom-btn')) return;
+  minimapDragging = true;
+  const { fx, fy } = clientPointToMinimapFraction(e.clientX, e.clientY);
+  jumpToMinimapPoint(fx, fy, false);
+});
+window.addEventListener('mousemove', e => {
+  if (!minimapDragging) return;
+  const { fx, fy } = clientPointToMinimapFraction(e.clientX, e.clientY);
+  jumpToMinimapPoint(fx, fy, false);
+});
+window.addEventListener('mouseup', () => { minimapDragging = false; });
 
 // ✅ ミニマップの上でのホイール／トラックパッド操作
 //    ・通常  → 本体をパン（移動量は「画面サイズに対する割合」で計算し、暴れないよう上限を設ける）

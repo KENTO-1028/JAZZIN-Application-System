@@ -241,6 +241,110 @@ export async function sendThankYouEmails({ eventId, reservationIds, subject, bod
   return data;
 }
 
+// ── キャンセル申請（予約者本人） ───────────────────────────────
+export async function submitCancellationRequest({ reservationId, qrToken, reason }) {
+  const { data, error } = await supabase.rpc('submit_cancellation_request', {
+    p_reservation_id: reservationId,
+    p_qr_token:       qrToken,
+    p_reason:         reason,
+  });
+  if (error) throw error;
+
+  // ✅ 申請自体は上のRPCで保存済み。管理者への通知メールはベストエフォート
+  //    （通知メールが多少遅れて失敗しても、管理画面から確認はできるため致命的ではない）
+  if (data?.success) {
+    try {
+      const { data: rsvInfo } = await supabase
+        .from('reservations')
+        .select('guest_name, guest_email, event:events(title), reservation_seats(seat:seats(label))')
+        .eq('id', reservationId).single();
+      if (rsvInfo) {
+        const seatLabels = (rsvInfo.reservation_seats || []).map(rs => rs.seat?.label).filter(Boolean).join('、');
+        await fetch(EDGE_FUNCTION_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON, 'Authorization': `Bearer ${SUPABASE_ANON}` },
+          body: JSON.stringify({
+            mode: 'notify_admin_cancellation_request',
+            event_title: rsvInfo.event?.title || '',
+            guest_name:  rsvInfo.guest_name,
+            guest_email: rsvInfo.guest_email,
+            seat_labels: seatLabels,
+            reason,
+          }),
+        });
+      }
+    } catch (err) {
+      console.error('[JAZZIN] 管理者通知メール送信失敗:', err);
+    }
+  }
+  return data;
+}
+
+// ── キャンセル申請（管理画面：承認・却下・返信メール・キャンセル待ち通知） ──
+export async function approveCancellationRequest(requestId) {
+  const { data, error } = await supabase.rpc('approve_cancellation_request', { p_request_id: requestId });
+  if (error) throw error;
+  return data;
+}
+
+export async function rejectCancellationRequest(requestId, adminNote) {
+  const { data, error } = await supabase.rpc('reject_cancellation_request', {
+    p_request_id: requestId,
+    p_admin_note: adminNote || null,
+  });
+  if (error) throw error;
+  return data;
+}
+
+export async function sendCancellationResponseEmail({ reservationId, guestName, guestEmail, eventTitle, subject, bodyTemplate }) {
+  const { data: sessionData } = await supabase.auth.getSession();
+  const accessToken = sessionData?.session?.access_token;
+  if (!accessToken) throw new Error('ログインセッションが切れています。再ログインしてください');
+
+  const res = await fetch(EDGE_FUNCTION_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON, 'Authorization': `Bearer ${accessToken}` },
+    body: JSON.stringify({
+      mode: 'send_cancellation_response_email',
+      reservation_id: reservationId,
+      guest_name:  guestName,
+      guest_email: guestEmail,
+      event_title: eventTitle,
+      subject,
+      body_template: bodyTemplate,
+    }),
+  });
+  const data = await res.json();
+  if (!res.ok && !data?.error) throw new Error(`送信リクエスト失敗 (${res.status})`);
+  return data;
+}
+
+export async function notifyWaitlist(eventId) {
+  const { data: sessionData } = await supabase.auth.getSession();
+  const accessToken = sessionData?.session?.access_token;
+  if (!accessToken) return { success: false };
+
+  const res = await fetch(EDGE_FUNCTION_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON, 'Authorization': `Bearer ${accessToken}` },
+    body: JSON.stringify({ mode: 'notify_waitlist', event_id: eventId }),
+  });
+  return await res.json();
+}
+
+// ── キャンセル待ち登録（予約者本人・誰でも実行可） ────────────────
+export async function joinWaitlist({ eventId, guestName, guestEmail, guestPhone, numSeats }) {
+  const { data, error } = await supabase.rpc('join_waitlist', {
+    p_event_id:    eventId,
+    p_guest_name:  guestName,
+    p_guest_email: guestEmail,
+    p_guest_phone: guestPhone || null,
+    p_num_seats:   numSeats || 1,
+  });
+  if (error) throw error;
+  return data;
+}
+
 // ── Realtime ────────────────────────────────────────────────
 export function subscribeSeats(eventId, onSeatChange) {
   return supabase

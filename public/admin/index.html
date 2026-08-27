@@ -55,6 +55,7 @@
   .sidebar-link:hover { color: var(--text-primary); background: var(--bg-raised); }
 }
 .sidebar-link.active { color: var(--accent-1); border-left-color: var(--accent-1); background: rgba(0,212,255,0.05); }
+.cancel-filter-btn.active { color: var(--accent-1); border-color: var(--accent-1); background: rgba(0,212,255,0.08); }
 .main-area {
   padding: clamp(1.25rem, 3vw, 2rem);
   overflow-y: auto;
@@ -163,6 +164,7 @@ textarea.form-input { min-height: 80px; resize: vertical; }
     <a href="/admin/layout-editor.html" class="sidebar-link">💺 座席レイアウト</a>
     <div class="sidebar-section">管理</div>
     <a href="#events" class="sidebar-link" data-section="events">🎵 イベント</a>
+    <a href="#cancellations" class="sidebar-link" data-section="cancellations">🚫 キャンセル申請<span id="cancel-badge" style="display:none;margin-left:6px;background:var(--c-red,#ff6b6b);color:#1a0505;border-radius:10px;padding:1px 7px;font-size:0.7rem;font-weight:700"></span></a>
     <div style="margin-top:auto;padding:1rem 1.25rem">
       <button class="btn btn-ghost btn-sm btn-full" id="btn-signout">ログアウト</button>
     </div>
@@ -323,13 +325,25 @@ textarea.form-input { min-height: 80px; resize: vertical; }
       </div>
     </div>
 
+    <!-- Cancellation Requests -->
+    <div id="section-cancellations" style="display:none">
+      <p class="page-title">キャンセル申請</p>
+      <div style="display:flex;gap:0.5rem;margin-bottom:1.25rem">
+        <button class="btn btn-ghost btn-sm cancel-filter-btn active" data-filter="pending">審査中</button>
+        <button class="btn btn-ghost btn-sm cancel-filter-btn" data-filter="approved">承認済み</button>
+        <button class="btn btn-ghost btn-sm cancel-filter-btn" data-filter="rejected">却下済み</button>
+        <button class="btn btn-ghost btn-sm cancel-filter-btn" data-filter="all">すべて</button>
+      </div>
+      <div id="cancellations-list"></div>
+    </div>
+
   </main>
 </div>
 
 <div id="toast"></div>
 
 <script type="module">
-import { supabase, signOut, formatDate, formatPrice, cancelReservation, sendThankYouEmails, deleteEvent } from '/core/supabase.js';
+import { supabase, signOut, formatDate, formatPrice, cancelReservation, sendThankYouEmails, deleteEvent, approveCancellationRequest, rejectCancellationRequest, sendCancellationResponseEmail, notifyWaitlist } from '/core/supabase.js';
 
 function showToast(msg,ms=2000){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),ms);}
 
@@ -357,6 +371,7 @@ document.querySelectorAll('[data-section]').forEach(link => {
     document.getElementById(`section-${sec}`).style.display = 'block';
     document.querySelectorAll('.sidebar-link').forEach(l=>l.classList.remove('active'));
     link.classList.add('active');
+    if (sec === 'cancellations') loadCancellationRequests('pending');
   });
 });
 
@@ -485,6 +500,7 @@ async function loadDashboard(ev) {
           return;
         }
         showToast('予約をキャンセルしました');
+        notifyWaitlist(ev.id).catch(() => {});
         await loadDashboard(currentDashboardEvent);
       } catch (err) {
         showToast('キャンセル失敗: ' + (err.message || 'エラー'));
@@ -938,11 +954,210 @@ async function generateSeats(eventId, rows, cols) {
   if (error) console.error('seat gen error', error);
 }
 
+// ══════════════════════════════════════════════════════════════
+// ✅ キャンセル申請の確認・承認・却下・返信メール
+// ══════════════════════════════════════════════════════════════
+const CANCEL_APPROVED_DEFAULT_SUBJECT = '【JAZZIN】キャンセルを承知いたしました';
+const CANCEL_APPROVED_DEFAULT_BODY =
+`{guest_name} 様
+
+ご連絡いただきました「{event_title}」のご予約キャンセルについて、承知いたしました。
+またの機会にぜひJAZZINへお越しいただけますと幸いです。
+
+この度はご連絡いただき、誠にありがとうございました。
+
+JAZZIN`;
+
+const CANCEL_REJECTED_DEFAULT_SUBJECT = '【JAZZIN】キャンセルのご連絡について';
+const CANCEL_REJECTED_DEFAULT_BODY =
+`{guest_name} 様
+
+ご連絡いただきました「{event_title}」のご予約キャンセルについてですが、
+誠に恐れ入りますが、今回は承ることが難しい状況でございます。
+
+ご不便をおかけし申し訳ございませんが、何卒ご理解いただけますと幸いです。
+ご不明な点がございましたら、本メールへご返信ください。
+
+JAZZIN`;
+
+async function refreshCancelBadge() {
+  const { count } = await supabase
+    .from('cancellation_requests')
+    .select('id', { count: 'exact', head: true })
+    .eq('status', 'pending');
+  const badge = document.getElementById('cancel-badge');
+  if (!badge) return;
+  if (count > 0) { badge.textContent = count; badge.style.display = 'inline-block'; }
+  else badge.style.display = 'none';
+}
+
+document.querySelectorAll('.cancel-filter-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.cancel-filter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    loadCancellationRequests(btn.dataset.filter);
+  });
+});
+
+async function loadCancellationRequests(filter) {
+  const listEl = document.getElementById('cancellations-list');
+  listEl.innerHTML = '<div class="skeleton" style="height:80px;border-radius:12px;margin-bottom:0.75rem"></div>';
+
+  let q = supabase
+    .from('cancellation_requests')
+    .select('id, reservation_id, event_id, guest_name, guest_email, seat_labels, reason, status, created_at, admin_note, event:events(title)')
+    .order('created_at', { ascending: false });
+  if (filter !== 'all') q = q.eq('status', filter);
+
+  const { data, error } = await q;
+  if (error) { listEl.innerHTML = '<p style="color:var(--text-secondary)">読み込みに失敗しました</p>'; return; }
+
+  if (!data?.length) {
+    listEl.innerHTML = `<p style="color:var(--text-secondary);font-size:0.85rem;padding:2rem 0;text-align:center">該当する申請はありません</p>`;
+    return;
+  }
+
+  listEl.innerHTML = data.map(r => {
+    const statusBadge = r.status === 'pending'  ? '<span class="badge badge-few">審査中</span>'
+                       : r.status === 'approved' ? '<span class="badge badge-ok">承認済み</span>'
+                       : '<span class="badge badge-sold">却下済み</span>';
+    const dateStr = new Date(r.created_at).toLocaleString('ja-JP');
+    return `
+    <div class="glass-card" style="padding:1.1rem;margin-bottom:0.85rem">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:0.75rem;margin-bottom:0.6rem">
+        <div>
+          <p style="font-weight:600;margin:0 0 2px">${r.guest_name}<span style="font-weight:400;color:var(--text-secondary);font-size:0.78rem"> ・ ${r.guest_email}</span></p>
+          <p style="font-size:0.78rem;color:var(--text-secondary);margin:0">${r.event?.title || '(イベント不明)'} ／ 座席：${r.seat_labels || '--'} ／ ${dateStr}</p>
+        </div>
+        ${statusBadge}
+      </div>
+      <p style="font-size:0.85rem;background:var(--bg-raised);border-radius:8px;padding:0.7rem 0.85rem;white-space:pre-wrap;margin:0 0 0.75rem">${r.reason}</p>
+      ${r.admin_note ? `<p style="font-size:0.78rem;color:var(--text-secondary);margin:0 0 0.75rem">却下メモ：${r.admin_note}</p>` : ''}
+      ${r.status === 'pending' ? `
+        <div style="display:flex;gap:0.5rem">
+          <button class="btn btn-primary btn-sm" data-approve="${r.id}">承認する</button>
+          <button class="btn btn-ghost btn-sm" data-reject="${r.id}" style="color:var(--c-red);border-color:rgba(255,107,107,0.2)">却下する</button>
+        </div>
+      ` : `
+        <button class="btn btn-ghost btn-sm" data-resend="${r.id}">返信メールを送る</button>
+      `}
+    </div>`;
+  }).join('');
+
+  listEl.querySelectorAll('[data-approve]').forEach(btn => {
+    btn.addEventListener('click', () => handleApprove(btn, data.find(r => r.id === btn.dataset.approve), filter));
+  });
+  listEl.querySelectorAll('[data-reject]').forEach(btn => {
+    btn.addEventListener('click', () => handleReject(btn, data.find(r => r.id === btn.dataset.reject), filter));
+  });
+  listEl.querySelectorAll('[data-resend]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const r = data.find(x => x.id === btn.dataset.resend);
+      openCancelResponseModal(r, r.status === 'approved');
+    });
+  });
+}
+
+async function handleApprove(btn, req, filter) {
+  if (!confirm(`${req.guest_name}様（${req.event?.title || ''}）のキャンセルを承認します。\n座席は解放され、実際にキャンセル処理が行われます。よろしいですか？`)) return;
+  btn.disabled = true; btn.textContent = '処理中...';
+  try {
+    const result = await approveCancellationRequest(req.id);
+    if (!result?.success) throw new Error(result?.error || '不明なエラー');
+    showToast('キャンセルを承認しました');
+
+    // ✅ 座席に空きが出たので、キャンセル待ちがいれば通知する
+    notifyWaitlist(result.event_id).catch(() => {});
+
+    await loadCancellationRequests(filter);
+    await refreshCancelBadge();
+    openCancelResponseModal(req, true);
+  } catch (err) {
+    showToast('承認に失敗: ' + (err.message || err));
+    btn.disabled = false; btn.textContent = '承認する';
+  }
+}
+
+async function handleReject(btn, req, filter) {
+  const note = prompt('却下理由（任意・お客様への返信メールには含まれません、管理用メモです）', '');
+  if (note === null) return; // キャンセル
+  if (!confirm(`${req.guest_name}様のキャンセル申請を却下します。よろしいですか？`)) return;
+  btn.disabled = true; btn.textContent = '処理中...';
+  try {
+    const result = await rejectCancellationRequest(req.id, note);
+    if (!result?.success) throw new Error(result?.error || '不明なエラー');
+    showToast('申請を却下しました');
+    await loadCancellationRequests(filter);
+    await refreshCancelBadge();
+    openCancelResponseModal(req, false);
+  } catch (err) {
+    showToast('却下処理に失敗: ' + (err.message || err));
+    btn.disabled = false; btn.textContent = '却下する';
+  }
+}
+
+function openCancelResponseModal(req, approved) {
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,4,8,0.72);z-index:1000;display:flex;align-items:center;justify-content:center;padding:1rem';
+  overlay.innerHTML = `
+    <div style="background:var(--bg-card,#0c1622);border:1px solid var(--border,#1c2b3a);border-radius:var(--radius-lg,14px);max-width:600px;width:100%;max-height:90vh;overflow-y:auto;padding:1.75rem">
+      <p style="font-size:1.1rem;font-weight:700;margin:0 0 1rem">${approved ? '✅ 承認の返信メール' : '📮 却下の返信メール'}</p>
+      <div class="form-group" style="margin-bottom:0.9rem">
+        <label class="form-label">宛先</label>
+        <input type="text" class="form-input" value="${req.guest_name} 様（${req.guest_email}）" disabled>
+      </div>
+      <div class="form-group" style="margin-bottom:0.9rem">
+        <label class="form-label">件名</label>
+        <input type="text" class="form-input" id="cr-subject" value="${approved ? CANCEL_APPROVED_DEFAULT_SUBJECT : CANCEL_REJECTED_DEFAULT_SUBJECT}">
+      </div>
+      <div class="form-group" style="margin-bottom:0.5rem">
+        <label class="form-label">本文（{guest_name} は名前、{event_title} はイベント名に自動置換されます）</label>
+        <textarea class="form-input" id="cr-body" rows="10" style="font-family:inherit;line-height:1.7;resize:vertical">${approved ? CANCEL_APPROVED_DEFAULT_BODY : CANCEL_REJECTED_DEFAULT_BODY}</textarea>
+      </div>
+      <div id="cr-result" style="font-size:0.8rem;margin-bottom:0.75rem"></div>
+      <div style="display:flex;gap:0.6rem;justify-content:flex-end">
+        <button class="btn btn-ghost btn-sm" id="cr-skip">送信せず閉じる</button>
+        <button class="btn btn-primary btn-sm" id="cr-send">この内容で送信する</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+
+  overlay.querySelector('#cr-skip').addEventListener('click', () => overlay.remove());
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+
+  overlay.querySelector('#cr-send').addEventListener('click', async () => {
+    const subject = overlay.querySelector('#cr-subject').value.trim();
+    const bodyTemplate = overlay.querySelector('#cr-body').value;
+    if (!subject || !bodyTemplate.trim()) { showToast('件名と本文を入力してください'); return; }
+
+    const sendBtn = overlay.querySelector('#cr-send');
+    sendBtn.disabled = true; sendBtn.textContent = '送信中...';
+    try {
+      const result = await sendCancellationResponseEmail({
+        reservationId: req.reservation_id,
+        guestName:     req.guest_name,
+        guestEmail:    req.guest_email,
+        eventTitle:    req.event?.title || '',
+        subject,
+        bodyTemplate,
+      });
+      if (!result?.success) throw new Error(result?.error || '不明なエラー');
+      overlay.querySelector('#cr-result').innerHTML = `<p style="color:var(--c-green,#4ade80)">✓ 送信しました</p>`;
+      sendBtn.style.display = 'none';
+      overlay.querySelector('#cr-skip').textContent = '閉じる';
+    } catch (err) {
+      overlay.querySelector('#cr-result').innerHTML = `<p style="color:var(--c-red,#ff6b6b)">送信に失敗しました：${err.message || err}</p>`;
+      sendBtn.disabled = false; sendBtn.textContent = 'この内容で送信する';
+    }
+  });
+}
+
 // ── Init ─────────────────────────────────────────────────────
 async function init() {
   const ok = await checkAuth();
   if (!ok) return;
   await loadAllEvents();
+  refreshCancelBadge();
 }
 init();
 

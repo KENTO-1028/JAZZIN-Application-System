@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
+<meta name="theme-color" content="#000a10">
+<title>JAZZIN — キャンセル申請</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&family=Noto+Serif+JP:wght@300;400;600&family=Bebas+Neue&display=swap" rel="stylesheet">
+<script src="/config.js"></script>
+<link rel="stylesheet" href="/ui/style.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<style>
+body { min-height:100dvh; }
+.cr-page {
+  max-width: 480px;
+  margin: 0 auto;
+  padding: clamp(1.5rem,4vw,2.5rem) var(--page-px) 6rem;
+  position: relative; z-index: 1;
+}
+.cr-title {
+  font-family: var(--font-ui);
+  font-size: 1.5rem; font-weight: 700; letter-spacing: -0.02em;
+  margin-bottom: 0.3rem;
+}
+.cr-sub { font-size: 0.82rem; color: var(--text-secondary); margin-bottom: 1.75rem; line-height: 1.7; }
+.cr-summary {
+  background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-lg);
+  padding: 1.1rem; margin-bottom: 1.5rem;
+}
+.cr-row { display:flex; justify-content:space-between; gap:0.5rem; font-size:0.85rem; padding:0.45rem 0; border-bottom:1px solid var(--border); }
+.cr-row:last-child { border-bottom:none; }
+.cr-row-label { color:var(--text-secondary); }
+.cr-row-value { color:var(--text-primary); font-weight:500; text-align:right; }
+.cr-warning {
+  background: rgba(255,180,60,0.08); border: 1px solid rgba(255,180,60,0.25);
+  border-radius: var(--radius); padding: 0.9rem 1rem; margin-bottom: 1.5rem;
+  font-size: 0.8rem; color: #ffcf8a; line-height: 1.8;
+}
+.cr-result { text-align:center; padding: 3rem 1rem; }
+.cr-result-icon { font-size: 2.6rem; margin-bottom: 1rem; }
+</style>
+</head>
+<body>
+
+<div class="aurora-wrap">
+  <div class="aurora-blob"></div>
+  <div class="aurora-blob"></div>
+  <div class="aurora-blob"></div>
+</div>
+
+<header class="header">
+  <div class="header-inner">
+    <a href="/" class="logo"><img src="/assets/jazzin_logo.png" alt="JAZZIN" height="26"></a>
+    <a href="/mypage.html" class="btn btn-ghost btn-sm">← マイページ</a>
+  </div>
+</header>
+
+<div id="toast"></div>
+
+<div class="cr-page" id="cr-page">
+  <div class="skeleton" style="height:2rem;width:60%;border-radius:6px;margin-bottom:1rem"></div>
+  <div class="skeleton" style="height:8rem;border-radius:14px"></div>
+</div>
+
+<script type="module">
+import { supabase, formatDate, submitCancellationRequest } from '/core/supabase.js';
+
+const params = new URLSearchParams(location.search);
+const RESERVATION_ID = params.get('rid');
+const QR_TOKEN        = params.get('token');
+const page = document.getElementById('cr-page');
+
+function showToast(msg, ms = 2400) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), ms);
+}
+
+function renderNotFound() {
+  page.innerHTML = `
+    <div class="cr-result">
+      <div class="cr-result-icon">🔍</div>
+      <p>予約情報が見つかりませんでした。</p>
+      <p style="font-size:0.8rem;color:var(--text-secondary);margin-top:0.5rem">
+        予約完了メール内のリンク、またはマイページからお試しください。
+      </p>
+      <a href="/mypage.html" class="btn btn-ghost" style="margin-top:1.5rem">マイページへ</a>
+    </div>`;
+}
+
+function renderAlreadyCancelled() {
+  page.innerHTML = `
+    <div class="cr-result">
+      <div class="cr-result-icon">✓</div>
+      <p>この予約はすでにキャンセル済みです。</p>
+      <a href="/" class="btn btn-ghost" style="margin-top:1.5rem">イベント一覧へ</a>
+    </div>`;
+}
+
+function renderSubmitted() {
+  page.innerHTML = `
+    <div class="cr-result">
+      <div class="cr-result-icon">📩</div>
+      <p style="font-weight:600;margin-bottom:0.5rem">キャンセル申請を受け付けました</p>
+      <p style="font-size:0.85rem;color:var(--text-secondary);line-height:1.8">
+        内容を確認のうえ、ご登録のメールアドレス宛にご連絡いたします。<br>
+        今しばらくお待ちください。
+      </p>
+      <a href="/mypage.html" class="btn btn-ghost" style="margin-top:1.5rem">マイページへ</a>
+    </div>`;
+}
+
+async function init() {
+  if (!RESERVATION_ID || !QR_TOKEN) { renderNotFound(); return; }
+
+  const { data: rsv, error } = await supabase
+    .from('reservations')
+    .select(`id, reservation_code, guest_name, guest_email, num_seats, status, qr_token,
+      event:events(title, event_at, venue_name),
+      reservation_seats(seat:seats(label)),
+      cancellation_requests(id, status)`)
+    .eq('id', RESERVATION_ID)
+    .single();
+
+  if (error || !rsv) { renderNotFound(); return; }
+  if (rsv.status === 'cancelled') { renderAlreadyCancelled(); return; }
+
+  const pendingRequest = (rsv.cancellation_requests || []).find(r => r.status === 'pending');
+  const seats = (rsv.reservation_seats || []).map(rs => rs.seat?.label).filter(Boolean).join('、') || '--';
+  const ev = rsv.event;
+
+  page.innerHTML = `
+    <p class="cr-title">キャンセル申請</p>
+    <p class="cr-sub">
+      内容をご確認のうえ、キャンセル理由をご入力ください。<br>
+      申請後、管理者が確認し、承認され次第メールでご連絡いたします。<br>
+      <strong>この時点ではまだキャンセルは確定していません。</strong>
+    </p>
+
+    <div class="cr-summary">
+      <div class="cr-row"><span class="cr-row-label">イベント</span><span class="cr-row-value">${ev?.title || '--'}</span></div>
+      <div class="cr-row"><span class="cr-row-label">日時</span><span class="cr-row-value">${ev?.event_at ? formatDate(ev.event_at) : '--'}</span></div>
+      <div class="cr-row"><span class="cr-row-label">会場</span><span class="cr-row-value">${ev?.venue_name || '--'}</span></div>
+      <div class="cr-row"><span class="cr-row-label">座席</span><span class="cr-row-value">${seats}</span></div>
+      <div class="cr-row"><span class="cr-row-label">予約番号</span><span class="cr-row-value">${rsv.reservation_code}</span></div>
+    </div>
+
+    ${pendingRequest ? `
+      <div class="cr-warning">
+        すでにキャンセル申請を送信済みです（審査中）。管理者からの返信をお待ちください。
+      </div>
+    ` : `
+      <div class="form-group">
+        <label class="form-label">お名前 *</label>
+        <input type="text" class="form-input" id="f-name" value="${rsv.guest_name}">
+      </div>
+      <div class="form-group">
+        <label class="form-label">キャンセル理由 *</label>
+        <textarea class="form-input" id="f-reason" rows="5" placeholder="キャンセルの理由をご記入ください"></textarea>
+      </div>
+      <p class="cr-warning" style="margin-top:0.5rem">
+        キャンセルの可否は管理者の判断によります。内容によってはご希望に添えない場合がございます。
+      </p>
+      <button class="btn btn-primary btn-full" id="btn-submit">この内容でキャンセルを申請する</button>
+    `}
+  `;
+
+  const btn = document.getElementById('btn-submit');
+  if (btn) {
+    btn.addEventListener('click', async () => {
+      const name   = document.getElementById('f-name').value.trim();
+      const reason = document.getElementById('f-reason').value.trim();
+      if (!name || !reason) { showToast('お名前とキャンセル理由をご入力ください'); return; }
+      if (!confirm('この内容でキャンセルを申請します。よろしいですか？')) return;
+
+      btn.disabled = true; btn.textContent = '送信中...';
+      try {
+        const result = await submitCancellationRequest({
+          reservationId: RESERVATION_ID,
+          qrToken: QR_TOKEN,
+          reason: name !== rsv.guest_name ? `（お名前：${name}）\n${reason}` : reason,
+        });
+        if (!result?.success) {
+          const msg = result?.error === 'already_requested' ? 'すでに申請済みです'
+                    : result?.error === 'already_cancelled'  ? 'この予約はすでにキャンセル済みです'
+                    : result?.error === 'not_found'           ? '予約情報の確認に失敗しました'
+                    : '送信に失敗しました';
+          showToast(msg);
+          btn.disabled = false; btn.textContent = 'この内容でキャンセルを申請する';
+          return;
+        }
+        renderSubmitted();
+      } catch (err) {
+        console.error('[JAZZIN] cancellation request error:', err);
+        showToast('送信に失敗しました: ' + (err.message || err));
+        btn.disabled = false; btn.textContent = 'この内容でキャンセルを申請する';
+      }
+    });
+  }
+}
+
+init();
+</script>
+</body>
+</html>
