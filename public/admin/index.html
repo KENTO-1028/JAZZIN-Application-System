@@ -430,7 +430,7 @@ async function loadDashboard(ev) {
   selectedForThankYou = new Set();
   const [rsvData, checkinData] = await Promise.all([
     supabase.from('reservations')
-      .select('id, reservation_code, guest_name, guest_email, guest_gender, guest_age_range, num_seats, payment_status, status, thank_you_mail_sent, reservation_seats(seat:seats(label))')
+      .select('id, reservation_code, guest_name, guest_email, guest_gender, guest_age_range, num_seats, payment_status, status, thank_you_mail_sent')
       .eq('event_id', ev.id)
       .order('created_at'),
     supabase.from('checkins')
@@ -440,6 +440,26 @@ async function loadDashboard(ev) {
 
   const reservations = rsvData.data || [];
   const checkins = new Set((checkinData.data||[]).map(c=>c.reservation_id));
+
+  // ✅ 座席情報は入れ子のJOINに頼らず、別クエリで確実に取得する
+  //    （reservation_seats(seat:seats(label)) の入れ子embedが環境によって
+  //    空配列を返すことがあったため、確実な方式に変更）
+  const rsvIds = reservations.map(r => r.id);
+  const seatLabelsByRsv = {};
+  if (rsvIds.length) {
+    const { data: rsvSeats } = await supabase.from('reservation_seats').select('reservation_id, seat_id').in('reservation_id', rsvIds);
+    const seatIds = [...new Set((rsvSeats||[]).map(rs=>rs.seat_id))];
+    let seatMap = {};
+    if (seatIds.length) {
+      const { data: seatRows } = await supabase.from('seats').select('id,label,row_num,col_num').in('id', seatIds);
+      (seatRows||[]).forEach(s => { seatMap[s.id] = s; });
+    }
+    (rsvSeats||[]).forEach(rs => { (seatLabelsByRsv[rs.reservation_id] ||= []).push(seatMap[rs.seat_id]); });
+    Object.keys(seatLabelsByRsv).forEach(id => {
+      seatLabelsByRsv[id] = seatLabelsByRsv[id].filter(Boolean).sort((a,b)=>a.row_num-b.row_num||a.col_num-b.col_num).map(s=>s.label);
+    });
+  }
+  reservations.forEach(r => { r._seatLabels = seatLabelsByRsv[r.id] || []; });
 
   // ✅ 統計はキャンセル済みを除いた「有効な予約」のみで計算する
   const activeRsvs   = reservations.filter(r => r.status !== 'cancelled');
@@ -457,7 +477,7 @@ async function loadDashboard(ev) {
 
   const tbody = document.getElementById('rsv-tbody');
   tbody.innerHTML = reservations.map(r => {
-    const seats = r.reservation_seats?.map(rs=>rs.seat?.label).join(' ') || '--';
+    const seats = (r._seatLabels||[]).join(' ') || '--';
     const isIn  = checkins.has(r.id);
     const isCancelled = r.status === 'cancelled';
     return `<tr style="${isCancelled ? 'opacity:0.45' : ''}">
@@ -631,7 +651,7 @@ function openThankYouModal(recipients, ev) {
 function exportCSV(ev, reservations, checkins) {
   const rows = [['受付番号','名前','性別','年齢','座席','人数','支払','チェックイン']];
   reservations.forEach(r => {
-    const seats = r.reservation_seats?.map(rs=>rs.seat?.label).join('/') || '';
+    const seats = (r._seatLabels||[]).join('/') || '';
     rows.push([r.reservation_code, r.guest_name, r.guest_gender||'', r.guest_age_range||'', seats, r.num_seats, r.payment_status, checkins.has(r.id)?'済':'']);
   });
   const csv = rows.map(r=>r.map(v=>`"${v}"`).join(',')).join('\n');

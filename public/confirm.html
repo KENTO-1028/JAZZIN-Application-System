@@ -272,15 +272,33 @@ async function loadReservation() {
     const { data: rsv, error } = await supabase
       .from('reservations')
       .select(`id, reservation_code, guest_name, guest_email, num_seats,
-        event:events(id, title, event_at, venue_name, venue_address, ticket_price, notes),
-        reservation_seats(seat:seats(label))`)
+        event:events(id, title, event_at, venue_name, venue_address, ticket_price, notes)`)
       .eq('id', RESERVATION_ID)
       .single();
 
     if (error || !rsv) throw new Error('not found');
 
+    // ✅ 座席情報は入れ子のJOINに頼らず、別クエリで確実に取得する
+    //    （reservation_seats(seat:seats(label)) の入れ子embedが
+    //    環境によって空配列を返すことがあったため、確実な方式に変更）
+    const { data: rsvSeats } = await supabase
+      .from('reservation_seats')
+      .select('seat_id')
+      .eq('reservation_id', RESERVATION_ID);
+
+    let seatLabels = [];
+    if (rsvSeats?.length) {
+      const { data: seatRows } = await supabase
+        .from('seats')
+        .select('id, label, row_num, col_num')
+        .in('id', rsvSeats.map(rs => rs.seat_id));
+      seatLabels = (seatRows || [])
+        .sort((a, b) => a.row_num - b.row_num || a.col_num - b.col_num)
+        .map(s => s.label);
+    }
+
     const ev    = rsv.event;
-    const seats = rsv.reservation_seats.map(rs => rs.seat?.label).filter(Boolean).join('  ');
+    const seats = seatLabels.join('  ');
     const price = ev?.ticket_price || 500;
 
     // ── 座席ヒーロー（最大表示） ──
@@ -304,30 +322,43 @@ async function loadReservation() {
     }
 
     // カレンダーURL生成（Google / Yahoo / .ics 共通データ）
-    if (ev?.event_at) {
+    // ✅ 日時未定のイベントはカレンダーに追加しようがないため、ボタンごと非表示にする
+    //    （以前は event_at が無いと3つのボタンすべてが無反応のまま残ってしまっていた）
+    const calBtns = [
+      document.getElementById('btn-calendar'),
+      document.getElementById('btn-calendar-yahoo'),
+      document.getElementById('btn-calendar-ics'),
+    ];
+    // ✅ 予約確認メール送信時にも使うため、ここで外側スコープに宣言しておく
+    //    （else節の中だけで宣言していたせいで、メール送信時にReferenceErrorが発生し、
+    //     予約確認メールの送信自体が毎回失敗していた重大なバグを修正）
+    let calendarUrl = '';
+    if (!ev?.event_at) {
+      calBtns.forEach(b => { if (b) b.style.display = 'none'; });
+    } else {
       const start = new Date(ev.event_at);
       const end   = new Date(start.getTime() + 3*60*60*1000);
-      const fmtGoogle = d => d.toISOString().replace(/[-:]/g,'').replace(/\.\d+/,'');
-      const calendarUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(ev.title)}&dates=${fmtGoogle(start)}/${fmtGoogle(end)}&location=${encodeURIComponent(ev.venue_name||'')}`;
+      const fmtUtc = d => d.toISOString().replace(/[-:]/g,'').replace(/\.\d+Z$/,'Z');
+
+      calendarUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(ev.title)}&dates=${fmtUtc(start)}/${fmtUtc(end)}&location=${encodeURIComponent(ev.venue_name||'')}`;
       document.getElementById('btn-calendar').href = calendarUrl;
 
-      // ✅ Yahoo!カレンダー（st/et は "YYYYMMDDTHHmmss" 形式、UTCの'Z'は付けない仕様）
-      const fmtYahoo = d => d.toISOString().replace(/[-:]/g,'').replace(/\.\d+Z$/,'');
+      // ✅ Yahoo!カレンダー（st/et はUTC時刻＋'Z'付き。'Z'を取り除くとローカル時刻扱いされ時刻がズレる）
       const yahooUrl = `https://calendar.yahoo.co.jp/?v=60&view=d&type=20&title=${encodeURIComponent(ev.title)}` +
-        `&st=${fmtYahoo(start)}&et=${fmtYahoo(end)}&in_loc=${encodeURIComponent(ev.venue_name||'')}`;
+        `&st=${fmtUtc(start)}&et=${fmtUtc(end)}&in_loc=${encodeURIComponent(ev.venue_name||'')}`;
       document.getElementById('btn-calendar-yahoo').href = yahooUrl;
 
       // ✅ .ics ファイル（Apple/Outlookなど、Google・Yahoo以外のカレンダーアプリ向け）
       document.getElementById('btn-calendar-ics').addEventListener('click', () => {
         const uid = `${RESERVATION_ID}@jazzin-application-system.pages.dev`;
-        const dtstamp = fmtGoogle(new Date());
+        const dtstamp = fmtUtc(new Date());
         const icsLines = [
           'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//JAZZIN//Reservation//JA',
           'BEGIN:VEVENT',
           `UID:${uid}`,
           `DTSTAMP:${dtstamp}`,
-          `DTSTART:${fmtGoogle(start)}`,
-          `DTEND:${fmtGoogle(end)}`,
+          `DTSTART:${fmtUtc(start)}`,
+          `DTEND:${fmtUtc(end)}`,
           `SUMMARY:${(ev.title||'').replace(/\n/g,' ')}`,
           `LOCATION:${(ev.venue_name||'').replace(/\n/g,' ')}`,
           `DESCRIPTION:予約番号 ${rsv.reservation_code}`,
@@ -374,6 +405,11 @@ async function loadReservation() {
     if (rsvEl) rsvEl.textContent = RSV_CODE || '--';
     renderQR(QR_TOKEN);
     document.getElementById('btn-cancel-request').href = `/cancel-request.html?rid=${RESERVATION_ID}&token=${QR_TOKEN}`;
+    // ✅ イベント情報を取得できていないため、リンク先を設定できないカレンダーボタンは隠す
+    ['btn-calendar', 'btn-calendar-yahoo', 'btn-calendar-ics'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.style.display = 'none';
+    });
   }
 
   document.getElementById('loading').style.display = 'none';

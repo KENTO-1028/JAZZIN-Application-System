@@ -113,9 +113,41 @@ function showToast(msg, ms=2000) {
 
 const list = document.getElementById('rsv-list');
 
+// ✅ 座席情報は入れ子のJOINに頼らず、別クエリで確実に取得して付与する
+//    （reservation_seats(seat:seats(label)) の入れ子embedが環境によって
+//    空配列を返すことがあったため、確実な方式に変更）
+async function attachSeatLabels(reservations) {
+  const list = Array.isArray(reservations) ? reservations : [reservations];
+  const ids = list.map(r => r.id).filter(Boolean);
+  if (!ids.length) return reservations;
+
+  const { data: rsvSeats } = await supabase
+    .from('reservation_seats').select('reservation_id, seat_id').in('reservation_id', ids);
+
+  const seatIds = [...new Set((rsvSeats || []).map(rs => rs.seat_id))];
+  let seatMap = {};
+  if (seatIds.length) {
+    const { data: seatRows } = await supabase
+      .from('seats').select('id, label, row_num, col_num').in('id', seatIds);
+    (seatRows || []).forEach(s => { seatMap[s.id] = s; });
+  }
+
+  const byRsv = {};
+  (rsvSeats || []).forEach(rs => {
+    (byRsv[rs.reservation_id] ||= []).push(seatMap[rs.seat_id]);
+  });
+  list.forEach(r => {
+    r._seatLabels = (byRsv[r.id] || [])
+      .filter(Boolean)
+      .sort((a, b) => a.row_num - b.row_num || a.col_num - b.col_num)
+      .map(s => s.label);
+  });
+  return reservations;
+}
+
 function renderCard(rsv, expanded = false) {
   const ev     = rsv.event;
-  const seats  = rsv.reservation_seats?.map(rs => rs.seat?.label).filter(Boolean).join('、') || '--';
+  const seats  = (rsv._seatLabels || []).join('、') || '--';
   const price  = ev?.ticket_price || 500;
   const isChecked = rsv.checkins?.length > 0;
   const isPaid    = rsv.payment_status === 'paid_cash';
@@ -185,7 +217,6 @@ async function loadFromLocal() {
     .from('reservations')
     .select(`id, reservation_code, qr_token, guest_name, num_seats, payment_status, status,
       event:events(title, event_at, venue_name, ticket_price),
-      reservation_seats(seat:seats(label)),
       checkins(id)`)
     .in('id', ids)
     .order('created_at', { ascending: false });
@@ -194,6 +225,7 @@ async function loadFromLocal() {
     list.innerHTML = `<div class="empty-state"><div class="empty-icon">🎫</div><p>予約が見つかりません</p></div>`;
     return;
   }
+  await attachSeatLabels(data);
   list.innerHTML = '';
   data.forEach((rsv, i) => list.appendChild(renderCard(rsv, i === 0)));
 }
@@ -211,7 +243,6 @@ async function searchReservations(query) {
     .from('reservations')
     .select(`id, reservation_code, qr_token, guest_name, num_seats, payment_status, status,
       event:events(title, event_at, venue_name, ticket_price),
-      reservation_seats(seat:seats(label)),
       checkins(id)`);
 
   if (isCode)       qb = qb.eq('reservation_code', q.toUpperCase());
@@ -225,6 +256,7 @@ async function searchReservations(query) {
     list.innerHTML = `<div class="empty-state"><div class="empty-icon">🔍</div><p>「${q}」の予約が見つかりません</p></div>`;
     return;
   }
+  await attachSeatLabels(data);
   data.forEach((rsv, i) => list.appendChild(renderCard(rsv, i === 0)));
 }
 
@@ -242,11 +274,10 @@ if (rid) {
   supabase.from('reservations')
     .select(`id, reservation_code, qr_token, guest_name, num_seats, payment_status, status,
       event:events(title, event_at, venue_name, ticket_price),
-      reservation_seats(seat:seats(label)),
       checkins(id)`)
     .eq('id', rid).single()
-    .then(({ data }) => {
-      if (data) { list.innerHTML = ''; list.appendChild(renderCard(data, true)); }
+    .then(async ({ data }) => {
+      if (data) { await attachSeatLabels(data); list.innerHTML = ''; list.appendChild(renderCard(data, true)); }
       else loadFromLocal();
     });
 } else {
