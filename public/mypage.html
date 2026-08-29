@@ -54,7 +54,7 @@ body { min-height:100dvh; }
   background:var(--bg-card);
   border:1px solid var(--border);
   border-radius:var(--radius-lg);
-  padding:1.1rem;
+  padding:0.9rem 1rem;
   margin-bottom:1.25rem;
 }
 .search-title {
@@ -62,8 +62,19 @@ body { min-height:100dvh; }
   color:var(--text-tertiary); margin-bottom:0.65rem;
 }
 .search-row { display:flex; gap:0.6rem; flex-wrap:wrap; }
-.search-row .form-input { min-width:0; flex:1 1 200px; }
+.search-row .form-input { min-width:0; flex:1 1 160px; }
 .search-row .btn { flex-shrink:0; }
+.search-row.search-row-compact { flex-direction:row; }
+.search-row-compact .form-input {
+  padding:.45rem .7rem;
+  font-size:16px; /* iOSの自動ズーム防止のため16px未満にはしない */
+}
+.search-row-compact .btn { padding:.45rem 1rem; }
+@media (max-width:420px) {
+  .search-row-compact { flex-direction:column; align-items:stretch; }
+  .search-row-compact .form-input,
+  .search-row-compact .btn { width:100%; }
+}
 </style>
 <!-- Cloudflare Web Analytics -->
 <script type='module' src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "0b0a908e36ff4880a6867235b78b567b"}'></script>
@@ -96,7 +107,7 @@ body { min-height:100dvh; }
     <p style="font-size:0.72rem;color:var(--text-tertiary);margin:-0.3rem 0 0.7rem">
       他のお客様の予約情報を保護するため、両方の入力が必要です。
     </p>
-    <div class="search-row" style="flex-direction:column;align-items:stretch;gap:0.6rem">
+    <div class="search-row search-row-compact">
       <input type="text" class="form-input" id="search-code" placeholder="予約番号（例：A-001）">
       <input type="email" class="form-input" id="search-email" placeholder="ご予約時のメールアドレス">
       <button class="btn btn-primary" id="btn-search">検索</button>
