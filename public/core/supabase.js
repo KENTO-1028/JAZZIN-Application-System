@@ -101,6 +101,27 @@ export async function lockSeats(eventId, seatIds) {
 //    予約フォームをキャンセルした時や、選択を取り消した時に呼ぶことで、
 //    5分間の自動失効を待たずに他のお客様がすぐその座席を選べるようにする。
 //    自分（同じSESSION_TOKEN）がロックした座席だけが対象。
+// ✅ 予約情報の安全な取得（id + qr_token の両方一致が必須）。
+//    reservations への直接の公開SELECTは廃止したため、公開ページからの
+//    予約参照は必ずこのRPC経由で行う。
+export async function getReservationSecure(id, token) {
+  const { data, error } = await supabase.rpc('get_reservation_secure', {
+    p_id: id, p_token: token,
+  });
+  if (error) throw error;
+  return data;
+}
+
+// ✅ 予約番号＋メールアドレスの両方一致が必須（マイページの検索機能用）。
+//    どちらか一方だけでは他人の予約を引き当てられないようにするため。
+export async function findReservationByCodeEmail(code, email) {
+  const { data, error } = await supabase.rpc('find_reservation_by_code_email', {
+    p_code: code, p_email: email,
+  });
+  if (error) throw error;
+  return data;
+}
+
 export async function releaseSeatLock(eventId, seatIds) {
   if (!seatIds || seatIds.length === 0) return { success: true };
   const { data, error } = await supabase.rpc('release_seat_lock', {

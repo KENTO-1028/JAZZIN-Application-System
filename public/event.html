@@ -320,7 +320,10 @@ body { min-height:100dvh; }
 <header class="header">
   <div class="header-inner">
     <a href="/" class="logo"><img src="/assets/jazzin_logo.png" alt="JAZZIN" height="26"></a>
-    <a href="/" class="btn btn-ghost btn-sm">← 一覧</a>
+    <nav style="display:flex;gap:0.5rem;align-items:center">
+      <a href="/mypage.html" class="btn btn-ghost btn-sm">🎫 マイページ</a>
+      <a href="/" class="btn btn-ghost btn-sm">← 一覧</a>
+    </nav>
   </div>
 </header>
 <div id="toast"></div>
@@ -668,6 +671,14 @@ function renderPage(ev, seatData, meta) {
         <div class="flow-step"><div class="flow-num">1</div><span style="color:var(--text-secondary)">QRコードを受付スタッフに提示</span></div>
         <div class="flow-step"><div class="flow-num">2</div><span style="color:var(--text-secondary)">現金でチケット料金をお支払い（${formatPrice(ev.ticket_price)} / 人）</span></div>
         <div class="flow-step"><div class="flow-num">3</div><span style="color:var(--text-secondary)">入場・お席へどうぞ</span></div>
+      </section>
+
+      <section class="section">
+        <p class="section-title">キャンセルについて</p>
+        <p style="color:var(--text-secondary);font-size:0.85rem;line-height:1.8;margin-bottom:0.6rem">
+          ご予約後にキャンセルが必要な場合は、予約完了メールまたはマイページからお手続きいただけます。
+        </p>
+        <a href="/cancel-policy.html" class="btn btn-ghost btn-sm">キャンセルの流れを見る →</a>
       </section>
 
       ${ev.notes ? `

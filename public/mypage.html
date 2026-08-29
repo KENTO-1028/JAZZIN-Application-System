@@ -90,11 +90,15 @@ body { min-height:100dvh; }
   <div class="page-title">MY TICKETS</div>
   <p class="page-sub">予約の確認・QR再表示</p>
 
-  <!-- メールで検索 -->
+  <!-- 予約番号＋メールアドレスで検索（両方一致が必須） -->
   <div class="search-form">
-    <p class="search-title">予約番号またはメールで検索</p>
-    <div class="search-row">
-      <input type="text" class="form-input" id="search-input" placeholder="A-001 または メールアドレス" style="flex:1">
+    <p class="search-title">予約番号とメールアドレスで検索</p>
+    <p style="font-size:0.72rem;color:var(--text-tertiary);margin:-0.3rem 0 0.7rem">
+      他のお客様の予約情報を保護するため、両方の入力が必要です。
+    </p>
+    <div class="search-row" style="flex-direction:column;align-items:stretch;gap:0.6rem">
+      <input type="text" class="form-input" id="search-code" placeholder="予約番号（例：A-001）">
+      <input type="email" class="form-input" id="search-email" placeholder="ご予約時のメールアドレス">
       <button class="btn btn-primary" id="btn-search">検索</button>
     </div>
   </div>
@@ -103,7 +107,7 @@ body { min-height:100dvh; }
 </div>
 
 <script type="module">
-import { supabase, formatDate, formatPrice } from '/core/supabase.js';
+import { supabase, formatDate, formatPrice, getReservationSecure, findReservationByCodeEmail } from '/core/supabase.js';
 
 function showToast(msg, ms=2000) {
   const t = document.getElementById('toast');
@@ -113,43 +117,11 @@ function showToast(msg, ms=2000) {
 
 const list = document.getElementById('rsv-list');
 
-// ✅ 座席情報は入れ子のJOINに頼らず、別クエリで確実に取得して付与する
-//    （reservation_seats(seat:seats(label)) の入れ子embedが環境によって
-//    空配列を返すことがあったため、確実な方式に変更）
-async function attachSeatLabels(reservations) {
-  const list = Array.isArray(reservations) ? reservations : [reservations];
-  const ids = list.map(r => r.id).filter(Boolean);
-  if (!ids.length) return reservations;
-
-  const { data: rsvSeats } = await supabase
-    .from('reservation_seats').select('reservation_id, seat_id').in('reservation_id', ids);
-
-  const seatIds = [...new Set((rsvSeats || []).map(rs => rs.seat_id))];
-  let seatMap = {};
-  if (seatIds.length) {
-    const { data: seatRows } = await supabase
-      .from('seats').select('id, label, row_num, col_num').in('id', seatIds);
-    (seatRows || []).forEach(s => { seatMap[s.id] = s; });
-  }
-
-  const byRsv = {};
-  (rsvSeats || []).forEach(rs => {
-    (byRsv[rs.reservation_id] ||= []).push(seatMap[rs.seat_id]);
-  });
-  list.forEach(r => {
-    r._seatLabels = (byRsv[r.id] || [])
-      .filter(Boolean)
-      .sort((a, b) => a.row_num - b.row_num || a.col_num - b.col_num)
-      .map(s => s.label);
-  });
-  return reservations;
-}
-
 function renderCard(rsv, expanded = false) {
   const ev     = rsv.event;
-  const seats  = (rsv._seatLabels || []).join('、') || '--';
+  const seats  = (rsv.seats || []).map(s => s.label).join('、') || '--';
   const price  = ev?.ticket_price || 500;
-  const isChecked = rsv.checkins?.length > 0;
+  const isChecked = !!rsv.checked_in;
   const isPaid    = rsv.payment_status === 'paid_cash';
 
   const card = document.createElement('div');
@@ -208,78 +180,65 @@ function renderQR(token, containerId) {
 async function loadFromLocal() {
   const saved = JSON.parse(localStorage.getItem('jazzin_myreservations') || '[]');
   if (!saved.length) {
-    list.innerHTML = `<div class="empty-state"><div class="empty-icon">🎫</div><p>このブラウザでの予約が見つかりません</p><p style="margin-top:0.5rem;font-size:0.8rem">下の検索フォームから予約番号かメールアドレスで検索できます</p></div>`;
+    list.innerHTML = `<div class="empty-state"><div class="empty-icon">🎫</div><p>このブラウザでの予約が見つかりません</p><p style="margin-top:0.5rem;font-size:0.8rem">下の検索フォームから予約番号とメールアドレスで検索できます</p></div>`;
     return;
   }
 
-  const ids = saved.map(r => r.id);
-  const { data } = await supabase
-    .from('reservations')
-    .select(`id, reservation_code, qr_token, guest_name, num_seats, payment_status, status,
-      event:events(title, event_at, venue_name, ticket_price),
-      checkins(id)`)
-    .in('id', ids)
-    .order('created_at', { ascending: false });
+  // ✅ id + qr_token の両方一致が必須の安全なRPCで、1件ずつ取得する
+  //    （このブラウザで予約した記録＝token を保持しているものだけを表示できる）
+  const results = await Promise.all(
+    saved.map(r => getReservationSecure(r.id, r.token).catch(() => null))
+  );
+  const data = results.filter(r => r?.success);
 
-  if (!data?.length) {
+  if (!data.length) {
     list.innerHTML = `<div class="empty-state"><div class="empty-icon">🎫</div><p>予約が見つかりません</p></div>`;
     return;
   }
-  await attachSeatLabels(data);
   list.innerHTML = '';
-  data.forEach((rsv, i) => list.appendChild(renderCard(rsv, i === 0)));
+  data
+    .sort((a, b) => (b.event?.event_at || '').localeCompare(a.event?.event_at || ''))
+    .forEach((rsv, i) => list.appendChild(renderCard(rsv, i === 0)));
 }
 
-async function searchReservations(query) {
-  const q = query.trim();
-  if (!q) return;
+async function searchReservations(code, email) {
+  if (!code.trim() || !email.trim()) {
+    showToast('予約番号とメールアドレスの両方をご入力ください');
+    return;
+  }
 
   list.innerHTML = '<div style="text-align:center;padding:2rem"><div class="spinner" style="margin:0 auto"></div></div>';
 
-  const isCode  = /^[A-Z]-\d+$/.test(q.toUpperCase());
-  const isEmail = q.includes('@');
-
-  let qb = supabase
-    .from('reservations')
-    .select(`id, reservation_code, qr_token, guest_name, num_seats, payment_status, status,
-      event:events(title, event_at, venue_name, ticket_price),
-      checkins(id)`);
-
-  if (isCode)       qb = qb.eq('reservation_code', q.toUpperCase());
-  else if (isEmail) qb = qb.eq('guest_email', q.toLowerCase());
-  else              qb = qb.ilike('guest_name', `%${q}%`);
-
-  const { data } = await qb.order('created_at', { ascending:false }).limit(10);
+  // ✅ 予約番号とメールアドレスの両方が一致した場合のみ返す安全なRPC。
+  //    どちらか一方だけでは他人の予約は絶対に引き当てられない。
+  const result = await findReservationByCodeEmail(code.trim(), email.trim()).catch(() => null);
 
   list.innerHTML = '';
-  if (!data?.length) {
-    list.innerHTML = `<div class="empty-state"><div class="empty-icon">🔍</div><p>「${q}」の予約が見つかりません</p></div>`;
+  if (!result?.success) {
+    list.innerHTML = `<div class="empty-state"><div class="empty-icon">🔍</div><p>該当する予約が見つかりません</p><p style="margin-top:0.5rem;font-size:0.8rem">予約番号・メールアドレスをご確認ください</p></div>`;
     return;
   }
-  await attachSeatLabels(data);
-  data.forEach((rsv, i) => list.appendChild(renderCard(rsv, i === 0)));
+  list.appendChild(renderCard(result, true));
 }
 
 document.getElementById('btn-search').addEventListener('click', () => {
-  searchReservations(document.getElementById('search-input').value);
+  searchReservations(document.getElementById('search-code').value, document.getElementById('search-email').value);
 });
-document.getElementById('search-input').addEventListener('keydown', e => {
-  if (e.key === 'Enter') searchReservations(e.target.value);
+[document.getElementById('search-code'), document.getElementById('search-email')].forEach(el => {
+  el.addEventListener('keydown', e => {
+    if (e.key === 'Enter') searchReservations(document.getElementById('search-code').value, document.getElementById('search-email').value);
+  });
 });
 
-// URL パラメータから直接表示
+// URL パラメータから直接表示（rid・token の両方が必須）
 const params = new URLSearchParams(location.search);
 const rid = params.get('rid');
-if (rid) {
-  supabase.from('reservations')
-    .select(`id, reservation_code, qr_token, guest_name, num_seats, payment_status, status,
-      event:events(title, event_at, venue_name, ticket_price),
-      checkins(id)`)
-    .eq('id', rid).single()
-    .then(async ({ data }) => {
-      if (data) { await attachSeatLabels(data); list.innerHTML = ''; list.appendChild(renderCard(data, true)); }
-      else loadFromLocal();
-    });
+const rtoken = params.get('token');
+if (rid && rtoken) {
+  getReservationSecure(rid, rtoken).then(result => {
+    if (result?.success) { list.innerHTML = ''; list.appendChild(renderCard(result, true)); }
+    else loadFromLocal();
+  }).catch(() => loadFromLocal());
 } else {
   loadFromLocal();
 }

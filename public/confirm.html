@@ -204,7 +204,7 @@ body { min-height:100dvh; }
 </div>
 
 <script type="module">
-import { supabase, formatDate, formatPrice } from '/core/supabase.js';
+import { supabase, formatDate, formatPrice, getReservationSecure } from '/core/supabase.js';
 
 const params = new URLSearchParams(location.search);
 const RESERVATION_ID = params.get('rid');
@@ -269,36 +269,16 @@ async function sendConfirmEmail({ reservationId, toEmail, toName, eventTitle, ev
 
 async function loadReservation() {
   try {
-    const { data: rsv, error } = await supabase
-      .from('reservations')
-      .select(`id, reservation_code, guest_name, guest_email, num_seats,
-        event:events(id, title, event_at, venue_name, venue_address, ticket_price, notes)`)
-      .eq('id', RESERVATION_ID)
-      .single();
+    if (!RESERVATION_ID || !QR_TOKEN) throw new Error('missing params');
 
-    if (error || !rsv) throw new Error('not found');
+    // ✅ id と qr_token の両方が一致した場合のみ返す安全なRPC経由で取得する
+    //    （reservationsテーブルへの直接アクセスは公開できないよう塞いだため）
+    const result = await getReservationSecure(RESERVATION_ID, QR_TOKEN);
+    if (!result?.success) throw new Error(result?.error || 'not_found');
 
-    // ✅ 座席情報は入れ子のJOINに頼らず、別クエリで確実に取得する
-    //    （reservation_seats(seat:seats(label)) の入れ子embedが
-    //    環境によって空配列を返すことがあったため、確実な方式に変更）
-    const { data: rsvSeats } = await supabase
-      .from('reservation_seats')
-      .select('seat_id')
-      .eq('reservation_id', RESERVATION_ID);
-
-    let seatLabels = [];
-    if (rsvSeats?.length) {
-      const { data: seatRows } = await supabase
-        .from('seats')
-        .select('id, label, row_num, col_num')
-        .in('id', rsvSeats.map(rs => rs.seat_id));
-      seatLabels = (seatRows || [])
-        .sort((a, b) => a.row_num - b.row_num || a.col_num - b.col_num)
-        .map(s => s.label);
-    }
-
+    const rsv = result;
     const ev    = rsv.event;
-    const seats = seatLabels.join('  ');
+    const seats = (rsv.seats || []).map(s => s.label).join('  ');
     const price = ev?.ticket_price || 500;
 
     // ── 座席ヒーロー（最大表示） ──

@@ -68,7 +68,7 @@ body { min-height:100dvh; }
 </div>
 
 <script type="module">
-import { supabase, formatDate, submitCancellationRequest } from '/core/supabase.js';
+import { supabase, formatDate, submitCancellationRequest, getReservationSecure } from '/core/supabase.js';
 
 const params = new URLSearchParams(location.search);
 const RESERVATION_ID = params.get('rid');
@@ -118,20 +118,13 @@ function renderSubmitted() {
 async function init() {
   if (!RESERVATION_ID || !QR_TOKEN) { renderNotFound(); return; }
 
-  const { data: rsv, error } = await supabase
-    .from('reservations')
-    .select(`id, reservation_code, guest_name, guest_email, num_seats, status, qr_token,
-      event:events(title, event_at, venue_name),
-      reservation_seats(seat:seats(label)),
-      cancellation_requests(id, status)`)
-    .eq('id', RESERVATION_ID)
-    .single();
-
-  if (error || !rsv) { renderNotFound(); return; }
+  const result = await getReservationSecure(RESERVATION_ID, QR_TOKEN);
+  if (!result?.success) { renderNotFound(); return; }
+  const rsv = result;
   if (rsv.status === 'cancelled') { renderAlreadyCancelled(); return; }
 
-  const pendingRequest = (rsv.cancellation_requests || []).find(r => r.status === 'pending');
-  const seats = (rsv.reservation_seats || []).map(rs => rs.seat?.label).filter(Boolean).join('、') || '--';
+  const pendingRequest = rsv.has_pending_cancellation;
+  const seats = (rsv.seats || []).map(s => s.label).join('、') || '--';
   const ev = rsv.event;
 
   page.innerHTML = `
