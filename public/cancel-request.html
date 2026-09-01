@@ -39,7 +39,7 @@ body { min-height:100dvh; }
   font-size: 0.8rem; color: #ffcf8a; line-height: 1.8;
 }
 .cr-result { text-align:center; padding: 3rem 1rem; }
-.cr-result-icon { font-size: 2.6rem; margin-bottom: 1rem; }
+.cr-result-icon { margin-bottom: 1rem; display:flex; justify-content:center; opacity:0.7; }
 </style>
 <!-- Cloudflare Web Analytics -->
 <script type='module' src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "0b0a908e36ff4880a6867235b78b567b"}'></script>
@@ -56,7 +56,7 @@ body { min-height:100dvh; }
 <header class="header">
   <div class="header-inner">
     <a href="/" class="logo"><img src="/assets/jazzin_logo.png" alt="JAZZIN" height="26"></a>
-    <a href="/mypage.html" class="btn btn-ghost btn-sm">← マイページ</a>
+    <a href="/mypage.html" class="btn btn-ghost btn-sm"><svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:3px"><path d="M12.5 4.5 6 10l6.5 5.5"/></svg>マイページ</a>
   </div>
 </header>
 
@@ -84,7 +84,7 @@ function showToast(msg, ms = 2400) {
 function renderNotFound() {
   page.innerHTML = `
     <div class="cr-result">
-      <div class="cr-result-icon">🔍</div>
+      <div class="cr-result-icon"><svg width="30" height="30" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><circle cx="8.5" cy="8.5" r="5.5"/><path d="m17 17-4-4"/></svg></div>
       <p>予約情報が見つかりませんでした。</p>
       <p style="font-size:0.8rem;color:var(--text-secondary);margin-top:0.5rem">
         予約完了メール内のリンク、またはマイページからお試しください。
@@ -96,7 +96,7 @@ function renderNotFound() {
 function renderAlreadyCancelled() {
   page.innerHTML = `
     <div class="cr-result">
-      <div class="cr-result-icon">✓</div>
+      <div class="cr-result-icon"><svg width="30" height="30" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10.5 8 14.5 16 6"/></svg></div>
       <p>この予約はすでにキャンセル済みです。</p>
       <a href="/" class="btn btn-ghost" style="margin-top:1.5rem">イベント一覧へ</a>
     </div>`;
@@ -105,7 +105,7 @@ function renderAlreadyCancelled() {
 function renderSubmitted() {
   page.innerHTML = `
     <div class="cr-result">
-      <div class="cr-result-icon">📩</div>
+      <div class="cr-result-icon"><svg width="30" height="30" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="4.5" width="15" height="11" rx="1.5"/><path d="m3 5.5 7 5.5 7-5.5"/></svg></div>
       <p style="font-weight:600;margin-bottom:0.5rem">キャンセル申請を受け付けました</p>
       <p style="font-size:0.85rem;color:var(--text-secondary);line-height:1.8">
         内容を確認のうえ、ご登録のメールアドレス宛にご連絡いたします。<br>

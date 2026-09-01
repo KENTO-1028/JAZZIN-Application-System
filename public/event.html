@@ -321,15 +321,15 @@ body { min-height:100dvh; }
   <div class="header-inner">
     <a href="/" class="logo"><img src="/assets/jazzin_logo.png" alt="JAZZIN" height="26"></a>
     <nav style="display:flex;gap:0.5rem;align-items:center">
-      <a href="/mypage.html" class="btn btn-ghost btn-sm">🎫 マイページ</a>
-      <a href="/" class="btn btn-ghost btn-sm">← 一覧</a>
+      <a href="/mypage.html" class="btn btn-ghost btn-sm"><svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px"><path d="M2 7.5a1.5 1.5 0 0 1 1.5-1.5h13A1.5 1.5 0 0 1 18 7.5v1a1.5 1.5 0 0 0 0 3v1a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 2 12.5v-1a1.5 1.5 0 0 0 0-3v-1Z"/><path d="M8 6v8" stroke-dasharray="1.6 1.8"/></svg>マイページ</a>
+      <a href="/" class="btn btn-ghost btn-sm"><svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:3px"><path d="M12.5 4.5 6 10l6.5 5.5"/></svg>一覧</a>
     </nav>
   </div>
 </header>
 <div id="toast"></div>
 
 <div class="seatzoom-control" id="seatzoom-control" title="座席表の拡大縮小">
-  <span class="seatzoom-icon">🔍</span>
+  <span class="seatzoom-icon"><svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="8.5" cy="8.5" r="5.5"/><path d="m17 17-4-4"/></svg></span>
   <button type="button" class="seatzoom-btn" id="seatzoom-out">－</button>
   <span class="seatzoom-pct" id="seatzoom-pct">100%</span>
   <button type="button" class="seatzoom-btn" id="seatzoom-in">＋</button>
@@ -364,7 +364,7 @@ body { min-height:100dvh; }
       <div class="booking-seats" id="booking-seats-label">座席を選んでください</div>
       <div class="booking-price" id="booking-price-label"></div>
       <div class="lock-timer" id="lock-timer-el" style="display:none">
-        🔒 <span id="lock-timer-val">5:00</span> で仮ロック解除
+        <svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:2px"><rect x="4.5" y="9" width="11" height="8" rx="1.5"/><path d="M7 9V6.5a3 3 0 0 1 6 0V9"/></svg> <span id="lock-timer-val">5:00</span> で仮ロック解除
       </div>
     </div>
     <button class="btn btn-primary btn-lg" id="btn-reserve" disabled>予約へ進む</button>
@@ -663,7 +663,7 @@ function renderPage(ev, seatData, meta) {
         <p class="section-title">ACCESS</p>
         <p style="color:var(--text-secondary);margin-bottom:0.75rem">${ev.venue_address}</p>
         <a href="https://maps.google.com/?q=${encodeURIComponent(ev.venue_address)}"
-           target="_blank" rel="noopener" class="btn btn-ghost btn-sm">Google Map で開く →</a>
+           target="_blank" rel="noopener" class="btn btn-ghost btn-sm">Google Map で開く</a>
       </section>` : ''}
 
       <section class="section">
@@ -678,7 +678,7 @@ function renderPage(ev, seatData, meta) {
         <p style="color:var(--text-secondary);font-size:0.85rem;line-height:1.8;margin-bottom:0.6rem">
           ご予約後にキャンセルが必要な場合は、予約完了メールまたはマイページからお手続きいただけます。
         </p>
-        <a href="/cancel-policy.html" class="btn btn-ghost btn-sm">キャンセルの流れを見る →</a>
+        <a href="/cancel-policy.html" class="btn btn-ghost btn-sm">キャンセルの流れを見る</a>
       </section>
 
       ${ev.notes ? `
