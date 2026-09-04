@@ -31,6 +31,15 @@ body { min-height:100dvh; }
   transition:border-color 120ms, background 120ms;
 }
 .rsv-card:hover { background:var(--bg-raised); border-color:var(--border-strong); }
+.rsv-card-used { opacity:0.6; }
+.rsv-card-used:hover { opacity:0.85; }
+.rsv-card-used .rsv-code { color:var(--text-secondary); }
+.qr-used-stamp {
+  display:flex; flex-direction:column; align-items:center; gap:0.4rem;
+  padding:1.4rem 1.5rem; border:2px solid var(--text-tertiary); border-radius:var(--radius-lg);
+  color:var(--text-tertiary); opacity:0.85;
+}
+.qr-used-stamp p { font-size:0.85rem; font-weight:700; letter-spacing:0.02em; margin:0; }
 .rsv-card-header {
   display:flex; justify-content:space-between; align-items:center;
   padding:0.875rem 1.1rem;
@@ -136,7 +145,7 @@ function renderCard(rsv, expanded = false) {
   const isPaid    = rsv.payment_status === 'paid_cash';
 
   const card = document.createElement('div');
-  card.className = 'rsv-card';
+  card.className = 'rsv-card' + (isChecked ? ' rsv-card-used' : '');
   card.dataset.id = rsv.id;
 
   card.innerHTML = `
@@ -146,7 +155,7 @@ function renderCard(rsv, expanded = false) {
         <div style="font-size:0.75rem;color:var(--text-secondary);margin-top:2px">${ev?.title || ''}</div>
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
-        <span class="badge rsv-status-badge ${isChecked ? 'badge-ok' : 'badge-few'}">${isChecked ? '入場済' : '未入場'}</span>
+        <span class="badge rsv-status-badge ${isChecked ? 'badge-ok' : 'badge-few'}">${isChecked ? '使用済み・入場済' : '未入場'}</span>
         <span class="badge rsv-status-badge ${isPaid ? 'badge-ok' : 'badge-sold'}">${isPaid ? '支払済' : '当日払い'}</span>
       </div>
     </div>
@@ -159,11 +168,17 @@ function renderCard(rsv, expanded = false) {
       <div class="rsv-row"><span class="rsv-row-label">料金</span><span class="rsv-row-value" style="color:var(--accent-1)">${formatPrice(price * rsv.num_seats)}</span></div>
     </div>
     <div class="qr-section" id="qr-${rsv.id}" style="${expanded ? '' : 'display:none'}">
+      ${isChecked ? `
+      <div class="qr-used-stamp">
+        <svg width="34" height="34" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10.5 8 14.5 16 6"/></svg>
+        <p>このチケットは使用済みです</p>
+      </div>
+      <p style="font-size:0.7rem;color:var(--text-secondary)">すでに受付でご入場いただいています</p>` : `
       <div class="qr-box" id="qrbox-${rsv.id}"></div>
-      <p style="font-size:0.7rem;color:var(--text-secondary)">受付でこのQRをご提示ください</p>
+      <p style="font-size:0.7rem;color:var(--text-secondary)">受付でこのQRをご提示ください</p>`}
       <a href="/confirm.html?rid=${rsv.id}&token=${rsv.qr_token}&code=${rsv.reservation_code}"
          class="btn btn-ghost btn-sm">予約完了ページを開く</a>
-      ${rsv.status !== 'cancelled' ? `
+      ${rsv.status !== 'cancelled' && !isChecked ? `
       <a href="/cancel-request.html?rid=${rsv.id}&token=${rsv.qr_token}"
          class="btn btn-ghost btn-sm" style="color:var(--text-tertiary);font-size:0.75rem">予約をキャンセルしたい場合はこちら</a>` : ''}
     </div>`;
@@ -175,10 +190,10 @@ function renderCard(rsv, expanded = false) {
     const open = body.style.display !== 'none';
     body.style.display = open ? 'none' : 'block';
     qr.style.display   = open ? 'none' : 'flex';
-    if (!open) renderQR(rsv.qr_token, `qrbox-${rsv.id}`);
+    if (!open && !isChecked) renderQR(rsv.qr_token, `qrbox-${rsv.id}`);
   });
 
-  if (expanded) renderQR(rsv.qr_token, `qrbox-${rsv.id}`);
+  if (expanded && !isChecked) renderQR(rsv.qr_token, `qrbox-${rsv.id}`);
   return card;
 }
 

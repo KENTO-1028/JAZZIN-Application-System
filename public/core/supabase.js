@@ -271,29 +271,23 @@ export async function submitCancellationRequest({ reservationId, qrToken, reason
   });
   if (error) throw error;
 
-  // ✅ 申請自体は上のRPCで保存済み。管理者への通知メールはベストエフォート
-  //    （通知メールが多少遅れて失敗しても、管理画面から確認はできるため致命的ではない）
+  // ✅ 通知メールに必要な情報はRPCがそのまま返すため、reservationsを
+  //    再度直接読み直す必要はない（以前はここで直接SELECTしており、
+  //    RLSの強化後にそれが失敗して通知メールが送られなくなっていた）
   if (data?.success) {
     try {
-      const { data: rsvInfo } = await supabase
-        .from('reservations')
-        .select('guest_name, guest_email, event:events(title), reservation_seats(seat:seats(label))')
-        .eq('id', reservationId).single();
-      if (rsvInfo) {
-        const seatLabels = (rsvInfo.reservation_seats || []).map(rs => rs.seat?.label).filter(Boolean).join('、');
-        await fetch(EDGE_FUNCTION_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON, 'Authorization': `Bearer ${SUPABASE_ANON}` },
-          body: JSON.stringify({
-            mode: 'notify_admin_cancellation_request',
-            event_title: rsvInfo.event?.title || '',
-            guest_name:  rsvInfo.guest_name,
-            guest_email: rsvInfo.guest_email,
-            seat_labels: seatLabels,
-            reason,
-          }),
-        });
-      }
+      await fetch(EDGE_FUNCTION_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON, 'Authorization': `Bearer ${SUPABASE_ANON}` },
+        body: JSON.stringify({
+          mode: 'notify_admin_cancellation_request',
+          event_title: data.event_title || '',
+          guest_name:  data.guest_name,
+          guest_email: data.guest_email,
+          seat_labels: data.seat_labels || '',
+          reason,
+        }),
+      });
     } catch (err) {
       console.error('[JAZZIN] 管理者通知メール送信失敗:', err);
     }
