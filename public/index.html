@@ -23,11 +23,34 @@
   background-size: 200% 200%;
   -webkit-background-clip: text; -webkit-text-fill-color: transparent;
   background-clip: text;
-  filter: drop-shadow(0 0 40px rgba(0,212,255,0.25));
-  animation: shimmer 6s ease infinite;
+  filter: drop-shadow(0 0 36px rgba(0,212,255,0.22));
+  animation: shimmer 7s ease infinite;
   margin-bottom: 0.3rem;
 }
 @keyframes shimmer { 0%,100%{background-position:0% 50%} 50%{background-position:100% 50%} }
+
+/* 五線譜のような横線の背景（ロゴアートワークに準拠） */
+.hero-stafflines {
+  position: relative;
+  padding: 1.6rem 0;
+  background-image: repeating-linear-gradient(
+    to bottom,
+    rgba(127,212,236,0.14) 0,
+    rgba(127,212,236,0.14) 1px,
+    transparent 1px,
+    transparent 15px
+  );
+  background-position: center;
+}
+.hero-stafflines::before,
+.hero-stafflines::after {
+  content: '';
+  position: absolute; left: 50%; transform: translateX(-50%);
+  width: min(92%, 640px); height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(0,212,255,0.55), transparent);
+}
+.hero-stafflines::before { top: 0; }
+.hero-stafflines::after  { bottom: 0; }
 .hero-tagline {
   font-family: var(--font-serif);
   font-style: italic; font-weight: 300;
@@ -82,7 +105,9 @@
 <main style="position:relative;z-index:1">
   <div class="container">
     <section class="hero">
-      <div class="hero-logo">JAZZIN</div>
+      <div class="hero-stafflines">
+        <div class="hero-logo">JAZZIN</div>
+      </div>
       <div class="hero-line"></div>
       <p class="hero-tagline">Jazz × Passion</p>
       <p class="hero-sub">現場で現金払い。QRでスムーズ入場。</p>

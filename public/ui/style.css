@@ -60,7 +60,7 @@
   --font-serif:   var(--serif);
   --font-display: var(--mono);
 
-  --grad-text: linear-gradient(160deg,#fff 0%,#c8e8f0 20%,#00d4ff 50%,#7fffd4 80%,#fff 100%);
+  --grad-text: linear-gradient(90deg,#e8f4f2 0%,#7fd4ec 25%,#00d4ff 50%,#4de8c8 75%,#8ff5c8 100%);
   --grad-line: linear-gradient(90deg,transparent,rgba(0,212,255,0.2),transparent);
 
   --seat-sz:  36px;
@@ -116,11 +116,11 @@ body {
    blur()フィルターを使わず radial-gradient で擬似的にぼかすことで
    見た目はほひ同じまま描画コストをほぼゼロにする。 */
 .aurora-wrap { position:fixed; inset:0; z-index:0; overflow:hidden; pointer-events:none; }
-.aurora-blob { position:absolute; border-radius:50%; opacity:0.09; background:radial-gradient(circle, var(--blob-color) 0%, transparent 68%); }
-.aurora-blob:nth-child(1) { width:60vw; height:60vw; top:-20%; left:-10%; --blob-color:#0055a0; }
-.aurora-blob:nth-child(2) { width:50vw; height:50vw; bottom:-15%; right:-8%; --blob-color:#006090; }
-.aurora-blob:nth-child(3) { width:40vw; height:40vw; top:45%; left:35%; --blob-color:#004060; }
-@media (max-width:768px) { .aurora-blob { opacity:0.06; } }
+.aurora-blob { position:absolute; border-radius:50%; opacity:0.06; background:radial-gradient(circle, var(--blob-color) 0%, transparent 70%); }
+.aurora-blob:nth-child(1) { width:70vw; height:70vw; top:-30%; left:-15%; --blob-color:#003a5c; }
+.aurora-blob:nth-child(2),
+.aurora-blob:nth-child(3) { display:none; }
+@media (max-width:768px) { .aurora-blob { opacity:0.045; } }
 @media (prefers-reduced-motion:reduce) {
   *,*::before,*::after { animation-duration:.01ms !important; transition-duration:.01ms !important; }
 }
@@ -131,7 +131,7 @@ h2 { font-family:var(--sans); font-size:clamp(1.1rem,2.5vw,1.45rem); font-weight
 h3 { font-family:var(--sans); font-size:1rem; font-weight:700; line-height:1.3; color:var(--fg); }
 p  { color:var(--fg-2); line-height:1.75; }
 
-/* ロゴ専用グラデ */
+/* ブランドロゴ用グラデーション（JAZZINロゴアートワークに準拠） */
 .grad-text {
   background:var(--grad-text); background-size:200% 200%;
   -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text;
@@ -170,13 +170,11 @@ p  { color:var(--fg-2); line-height:1.75; }
   height:var(--header-h);
   display:flex; align-items:center; justify-content:space-between; gap:.75rem;
 }
-/* ロゴ：Bebas Neue + グラデ維持 */
+/* ロゴ */
 .logo {
-  font-family:var(--mono); font-size:1.35rem; letter-spacing:.18em;
   text-decoration:none;
-  background:var(--grad-text); background-size:200% 200%;
-  -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text;
   flex-shrink:0; padding:0 2px;
+  display:flex; align-items:center;
 }
 .logo img { height:24px; width:auto; display:block; }
 

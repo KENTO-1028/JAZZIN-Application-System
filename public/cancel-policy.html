@@ -38,10 +38,19 @@ body { min-height:100dvh; }
 .cp-step-body p:first-child { font-weight: 600; margin: 0 0 0.3rem; font-size: 0.92rem; }
 .cp-step-body p:last-child { color: var(--text-secondary); font-size: 0.82rem; line-height: 1.8; margin: 0; }
 .cp-note {
-  background: rgba(255,180,60,0.08); border: 1px solid rgba(255,180,60,0.25);
-  border-radius: var(--radius); padding: 1rem 1.1rem; margin-top: 2rem;
-  font-size: 0.8rem; color: #ffcf8a; line-height: 1.9;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-left: 2px solid var(--text-tertiary);
+  border-radius: var(--radius);
+  padding: 1.1rem 1.2rem;
+  margin-top: 2rem;
 }
+.cp-note-label {
+  font-size: 0.68rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--text-tertiary); margin: 0 0 0.5rem;
+}
+.cp-note p { font-size: 0.8rem; color: var(--text-secondary); line-height: 1.85; margin: 0 0 0.9rem; }
+.cp-note p:last-child { margin-bottom: 0; }
 </style>
 </head>
 <body>
@@ -102,8 +111,9 @@ body { min-height:100dvh; }
   </div>
 
   <div class="cp-note">
-    <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px;flex-shrink:0"><path d="M10 3 2 17h16L10 3Z"/><path d="M10 8.5v3.5M10 14.5h.01"/></svg>キャンセルの可否は状況によりご希望に添えない場合がございます。特に開催直前のキャンセルはご対応が難しい場合がございますので、あらかじめご了承ください。<br><br>
-    ご不明な点がございましたら、お問い合わせ先（play.music.passion3@gmail.com）までご連絡ください。
+    <p class="cp-note-label">ご注意</p>
+    <p>キャンセルの可否は状況によりご希望に添えない場合がございます。特に開催直前のキャンセルはご対応が難しい場合がございますので、あらかじめご了承ください。</p>
+    <p>ご不明な点がございましたら、お問い合わせ先（play.music.passion3@gmail.com）までご連絡ください。</p>
   </div>
 </div>
 

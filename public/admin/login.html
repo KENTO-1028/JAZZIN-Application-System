@@ -20,8 +20,11 @@ body { display:flex; align-items:center; justify-content:center; min-height:100d
   font-size: 2.8rem; letter-spacing: 0.18em;
   background: var(--grad-text); background-size:200% 200%;
   -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text;
+  filter: drop-shadow(0 0 24px rgba(0,212,255,0.2));
+  animation: shimmer 7s ease infinite;
   margin-bottom: 0.5rem;
 }
+@keyframes shimmer { 0%,100%{background-position:0% 50%} 50%{background-position:100% 50%} }
 .login-sub {
   text-align:center;
   font-family: var(--font-body);
