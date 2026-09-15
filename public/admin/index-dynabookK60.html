@@ -1,0 +1,1023 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>JAZZIN — 管理ダッシュボード</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&family=Noto+Serif+JP:wght@300;400;600&family=Bebas+Neue&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/ui/style.css">
+<script src="/config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<style>
+/* Admin layout: sidebar + main */
+.admin-layout {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+.sidebar {
+  background: var(--bg-card);
+  border-right: 1px solid var(--border);
+  padding: 1rem 0;
+  position: sticky; top: 0;
+  height: 100vh; height: 100dvh;
+  overflow-y: auto;
+  /* iOS momentum scroll */
+  -webkit-overflow-scrolling: touch;
+}
+.sidebar-logo {
+  padding: 0.5rem 1.25rem 1rem;
+  font-family: var(--font-ui);
+  font-size: 0.95rem; font-weight: 700;
+  letter-spacing: 0.02em; color: var(--accent-1);
+}
+.sidebar-section {
+  font-size: 0.65rem; font-weight: 600;
+  letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--text-tertiary);
+  padding: 0.875rem 1.25rem 0.35rem;
+}
+.sidebar-link {
+  display: flex; align-items: center; gap: 0.5rem;
+  padding: 0.6rem 1.25rem;
+  /* Touch target */
+  min-height: 44px;
+  color: var(--text-secondary); text-decoration: none;
+  font-size: 0.875rem;
+  transition: color var(--transition), background var(--transition);
+  border-left: 2px solid transparent;
+  -webkit-tap-highlight-color: transparent;
+}
+@media (hover: hover) and (pointer: fine) {
+  .sidebar-link:hover { color: var(--text-primary); background: var(--bg-raised); }
+}
+.sidebar-link.active { color: var(--accent-1); border-left-color: var(--accent-1); background: rgba(0,212,255,0.05); }
+.main-area {
+  padding: clamp(1.25rem, 3vw, 2rem);
+  overflow-y: auto;
+  /* prevent content going under Safari toolbar */
+  padding-bottom: calc(clamp(1.25rem, 3vw, 2rem) + env(safe-area-inset-bottom, 0px));
+}
+.page-title {
+  font-family: var(--font-ui);
+  font-size: clamp(1.15rem, 2.5vw, 1.4rem);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin-bottom: 1.25rem;
+  color: var(--text-primary);
+}
+/* Stats cards */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 0.75rem; margin-bottom: 1.5rem;
+}
+.stat-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem;
+}
+.stat-card-label { font-size: 0.7rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-tertiary); margin-bottom: 0.3rem; }
+.stat-card-value { font-family: var(--font-ui); font-size: 1.5rem; font-weight: 700; letter-spacing: -0.02em; color: var(--text-primary); }
+/* Table */
+.data-table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+.data-table th {
+  text-align: left; padding: 0.55rem 0.75rem;
+  font-size: 0.7rem; font-weight: 600;
+  letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--text-tertiary);
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+.data-table td {
+  padding: 0.7rem 0.75rem;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+  color: var(--text-primary);
+}
+.data-table tr:last-child td { border-bottom: none; }
+@media (hover: hover) and (pointer: fine) {
+  .data-table tr:hover td { background: var(--bg-raised); }
+}
+/* Event form */
+.form-two { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+textarea.form-input { min-height: 80px; resize: vertical; }
+
+/* ── iPad portrait: collapse sidebar to bottom nav ── */
+@media (max-width: 767px) {
+  .admin-layout { grid-template-columns: 1fr; grid-template-rows: 1fr auto; }
+  .sidebar {
+    position: fixed; bottom: 0; left: 0; right: 0; top: auto;
+    height: auto;
+    display: flex; flex-direction: row; overflow-x: auto; overflow-y: hidden;
+    padding: 0;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    border-right: none; border-top: 1px solid var(--border);
+    z-index: 80;
+    background: rgba(4,8,15,0.97);
+  }
+  .sidebar-logo,
+  .sidebar-section { display: none; }
+  .sidebar-link {
+    flex-direction: column; gap: 3px;
+    padding: 0.5rem 1rem;
+    min-width: 64px; min-height: 52px;
+    font-size: 0.65rem; font-weight: 500;
+    border-left: none; border-top: 2px solid transparent;
+    text-align: center; flex-shrink: 0;
+    white-space: nowrap;
+  }
+  .sidebar-link.active { border-top-color: var(--accent-1); border-left: none; }
+  .main-area { padding: 1.25rem 1rem; padding-bottom: calc(68px + env(safe-area-inset-bottom, 0px)); }
+  .form-two { grid-template-columns: 1fr; }
+  .stats-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* ── iPad landscape sidebar: slightly narrower ── */
+@media (min-width: 768px) and (max-width: 1023px) {
+  .admin-layout { grid-template-columns: 180px 1fr; }
+  .stats-grid { grid-template-columns: repeat(3, 1fr); }
+}
+</style>
+</head>
+<body>
+
+<!-- Aurora -->
+<div class="aurora-wrap">
+  <div class="aurora-blob"></div>
+  <div class="aurora-blob"></div>
+  <div class="aurora-blob"></div>
+</div>
+
+<div class="admin-layout">
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">JAZZIN</div>
+    <div class="sidebar-section">運営</div>
+    <a href="#dashboard" class="sidebar-link active" data-section="dashboard">📊 ダッシュボード</a>
+    <a href="/checkin.html" class="sidebar-link" target="_blank">📷 受付モード</a>
+    <a href="/admin/layout-editor.html" class="sidebar-link">💺 座席レイアウト</a>
+    <div class="sidebar-section">管理</div>
+    <a href="#events" class="sidebar-link" data-section="events">🎵 イベント</a>
+    <div style="margin-top:auto;padding:1rem 1.25rem">
+      <button class="btn btn-ghost btn-sm btn-full" id="btn-signout">ログアウト</button>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <main class="main-area">
+    <div id="auth-guard" style="text-align:center;padding:4rem;display:none">
+      <p style="margin-bottom:1rem">管理者ログインが必要です</p>
+      <a href="/admin/login.html" class="btn btn-primary">ログイン</a>
+    </div>
+
+    <!-- Dashboard -->
+    <div id="section-dashboard">
+      <p class="page-title">ダッシュボード</p>
+      <div id="dashboard-event-select" style="margin-bottom:1.5rem">
+        <select class="form-input" id="sel-event" style="max-width:400px">
+          <option value="">イベントを選択...</option>
+        </select>
+      </div>
+      <div class="stats-grid" id="stats-grid">
+        <div class="stat-card"><div class="stat-card-label">予約人数</div><div class="stat-card-value" id="s-reservations">--</div></div>
+        <div class="stat-card"><div class="stat-card-label">入場済(人)</div><div class="stat-card-value" id="s-checkins" style="color:var(--c-green)">--</div></div>
+        <div class="stat-card"><div class="stat-card-label">未入場(人)</div><div class="stat-card-value" id="s-remaining">--</div></div>
+        <div class="stat-card"><div class="stat-card-label">回収額</div><div class="stat-card-value" id="s-cash" style="color:var(--accent-1)">--</div></div>
+      </div>
+      <div style="display:flex;gap:0.75rem;margin-bottom:1rem;align-items:center;flex-wrap:wrap">
+        <button class="btn btn-ghost btn-sm" id="btn-csv">📥 CSV出力</button>
+        <button class="btn btn-primary btn-sm" id="btn-thank-you" disabled>🎉 お礼メールを送る（<span id="thank-you-count">0</span>件選択中）</button>
+      </div>
+      <div style="overflow-x:auto">
+        <table class="data-table" id="rsv-table">
+          <thead>
+            <tr>
+              <th><input type="checkbox" id="chk-select-all"></th>
+              <th>受付番号</th><th>名前</th><th>性別</th><th>年齢</th><th>座席</th><th>人数</th>
+              <th>支払</th><th>チェックイン</th><th>お礼メール</th><th>状態</th><th>操作</th>
+            </tr>
+          </thead>
+          <tbody id="rsv-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Events -->
+    <div id="section-events" style="display:none">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.5rem">
+        <p class="page-title" style="margin:0">イベント管理</p>
+        <button class="btn btn-primary btn-sm" id="btn-new-event">+ 新規作成</button>
+      </div>
+      <div id="events-list"></div>
+      <!-- Event form -->
+      <div id="event-form-wrap" style="display:none;margin-top:2rem">
+        <div class="card"><div class="card-body">
+          <h3 id="event-form-title" style="margin-bottom:0.5rem">イベント作成</h3>
+          <p id="draft-indicator" style="font-size:0.72rem;color:var(--text-secondary);margin-bottom:1rem;min-height:1em"></p>
+          <div class="form-stack" style="display:flex;flex-direction:column;gap:0.9rem">
+            <div class="form-two">
+              <div class="form-group">
+                <label class="form-label">タイトル *</label>
+                <input type="text" class="form-input" id="ef-title">
+              </div>
+              <div class="form-group">
+                <label class="form-label">会場名 *</label>
+                <input type="text" class="form-input" id="ef-venue">
+              </div>
+            </div>
+            <div class="form-two">
+              <div class="form-group">
+                <label class="form-label">開催日時 *</label>
+                <input type="datetime-local" class="form-input" id="ef-event-at">
+              </div>
+              <div class="form-group">
+                <label class="form-label">開場時間</label>
+                <input type="datetime-local" class="form-input" id="ef-doors-at">
+              </div>
+            </div>
+            <div class="form-two">
+              <div class="form-group">
+                <label class="form-label">チケット料金 (円)</label>
+                <input type="number" class="form-input" id="ef-price" value="500" min="0">
+              </div>
+              <div class="form-group">
+                <label class="form-label">座席数</label>
+                <input type="number" class="form-input" id="ef-capacity" value="36" min="1">
+              </div>
+            </div>
+            <div class="form-two">
+              <div class="form-group">
+                <label class="form-label">行数 (rows)</label>
+                <input type="number" class="form-input" id="ef-rows" value="6" min="1" max="20">
+              </div>
+              <div class="form-group">
+                <label class="form-label">列数 (cols)</label>
+                <input type="number" class="form-input" id="ef-cols" value="6" min="1" max="20">
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">会場住所</label>
+              <input type="text" class="form-input" id="ef-address">
+            </div>
+            <div class="form-group">
+              <label class="form-label">説明</label>
+              <textarea class="form-input" id="ef-desc" rows="3"></textarea>
+            </div>
+            <div class="form-group">
+              <label class="form-label">注意事項</label>
+              <textarea class="form-input" id="ef-notes" rows="2"></textarea>
+            </div>
+            <div class="form-group">
+              <label class="form-label">ヒーロー画像</label>
+              <div id="hero-upload-area" style="border:1px dashed var(--border);border-radius:var(--radius);padding:1.5rem;text-align:center;cursor:pointer;background:rgba(0,15,30,0.4);transition:border-color 200ms;position:relative" 
+                   onclick="document.getElementById('ef-hero-file').click()"
+                   ondragover="event.preventDefault();this.style.borderColor='var(--accent-1)'"
+                   ondragleave="this.style.borderColor='var(--border)'"
+                   ondrop="handleHeroDrop(event)">
+                <div id="hero-preview-wrap" style="display:none;margin-bottom:0.75rem">
+                  <img id="hero-preview-img" src="" alt="preview" style="max-width:100%;max-height:180px;border-radius:6px;object-fit:cover">
+                </div>
+                <div id="hero-upload-hint">
+                  <div style="font-size:1.5rem;margin-bottom:0.4rem">🖼</div>
+                  <div style="font-size:0.82rem;color:var(--text-secondary)">クリックまたはドラッグ＆ドロップで画像をアップロード</div>
+                  <div style="font-size:0.72rem;color:var(--text-tertiary);margin-top:0.25rem">JPG・PNG・WEBP対応・圧縮なし</div>
+                </div>
+                <div id="hero-uploading" style="display:none">
+                  <div class="spinner" style="margin:0 auto 0.5rem"></div>
+                  <div style="font-size:0.8rem;color:var(--text-secondary)">アップロード中...</div>
+                </div>
+                <input type="file" id="ef-hero-file" accept="image/*" style="display:none" onchange="handleHeroUpload(this.files[0])">
+              </div>
+              <div style="display:flex;align-items:center;gap:0.5rem;margin-top:0.5rem">
+                <input type="text" class="form-input" id="ef-hero" placeholder="アップロード後に自動入力されます" style="flex:1;font-size:0.78rem" readonly>
+                <button type="button" class="btn btn-ghost btn-sm" id="btn-hero-clear" onclick="clearHeroImage()" style="display:none;flex-shrink:0">削除</button>
+              </div>
+            </div>
+            <div class="form-two">
+              <div class="form-group">
+                <label class="form-label">ステータス</label>
+                <select class="form-input" id="ef-status">
+                  <option value="draft">下書き</option>
+                  <option value="published">公開</option>
+                  <option value="ended">終了</option>
+                  <option value="cancelled">キャンセル</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">公開日時</label>
+                <input type="datetime-local" class="form-input" id="ef-publish-at">
+              </div>
+            </div>
+            <div style="display:flex;gap:0.75rem;margin-top:0.5rem">
+              <button class="btn btn-ghost" id="btn-event-cancel">キャンセル</button>
+              <button class="btn btn-primary" id="btn-event-save">保存</button>
+              <button class="btn btn-ghost btn-sm" id="btn-event-dup" style="display:none">複製</button>
+            </div>
+          </div>
+        </div></div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<div id="toast"></div>
+
+<script type="module">
+import { supabase, signOut, formatDate, formatPrice, cancelReservation, sendThankYouEmails, deleteEvent } from '/core/supabase.js';
+
+function showToast(msg,ms=2000){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),ms);}
+
+// ── Auth guard ───────────────────────────────────────────────
+async function checkAuth() {
+  const { data } = await supabase.auth.getUser();
+  if (!data?.user) {
+    document.getElementById('auth-guard').style.display = 'block';
+    document.querySelectorAll('[id^="section-"]').forEach(el=>el.style.display='none');
+    return false;
+  }
+  return true;
+}
+
+document.getElementById('btn-signout').addEventListener('click', async () => {
+  await signOut(); location.href = '/admin/login.html';
+});
+
+// ── Nav ──────────────────────────────────────────────────────
+document.querySelectorAll('[data-section]').forEach(link => {
+  link.addEventListener('click', e => {
+    e.preventDefault();
+    const sec = link.dataset.section;
+    document.querySelectorAll('[id^="section-"]').forEach(el => el.style.display='none');
+    document.getElementById(`section-${sec}`).style.display = 'block';
+    document.querySelectorAll('.sidebar-link').forEach(l=>l.classList.remove('active'));
+    link.classList.add('active');
+  });
+});
+
+// ── Load events for selector ─────────────────────────────────
+let allEvents = [];
+async function loadAllEvents() {
+  const { data } = await supabase
+    .from('events')
+    .select('id, title, event_at, status, ticket_price, capacity')
+    .order('event_at', { ascending: false });
+  allEvents = data || [];
+  const sel = document.getElementById('sel-event');
+  allEvents.forEach(ev => {
+    const o = document.createElement('option');
+    o.value = ev.id; o.textContent = `${ev.title} (${ev.event_at ? new Date(ev.event_at).toLocaleDateString('ja-JP') : '日時未定'})`;
+    sel.appendChild(o);
+  });
+  renderEventsList();
+}
+
+document.getElementById('sel-event').addEventListener('change', e => {
+  const ev = allEvents.find(x => x.id === e.target.value);
+  if (ev) loadDashboard(ev);
+});
+
+// ── Dashboard ────────────────────────────────────────────────
+let currentDashboardEvent = null;
+let selectedForThankYou = new Set();
+
+async function loadDashboard(ev) {
+  currentDashboardEvent = ev;
+  selectedForThankYou = new Set();
+  const [rsvData, checkinData] = await Promise.all([
+    supabase.from('reservations')
+      .select('id, reservation_code, guest_name, guest_email, guest_gender, guest_age_range, num_seats, payment_status, status, thank_you_mail_sent, reservation_seats(seat:seats(label))')
+      .eq('event_id', ev.id)
+      .order('created_at'),
+    supabase.from('checkins')
+      .select('reservation_id')
+      .eq('event_id', ev.id),
+  ]);
+
+  const reservations = rsvData.data || [];
+  const checkins = new Set((checkinData.data||[]).map(c=>c.reservation_id));
+
+  // ✅ 統計はキャンセル済みを除いた「有効な予約」のみで計算する
+  const activeRsvs   = reservations.filter(r => r.status !== 'cancelled');
+  const totalPeople  = activeRsvs.reduce((s,r)=>s+r.num_seats,0);
+  // ✅ 「入場した人数」は予約件数ではなく、実際に受付完了した予約のnum_seatsを合算する
+  //    （複数人予約1件を「1人」と数えてしまうバグを修正）
+  const checkedInRsvs   = activeRsvs.filter(r=>checkins.has(r.id));
+  const checkedInPeople = checkedInRsvs.reduce((s,r)=>s+r.num_seats,0);
+  const cashSeats     = activeRsvs.filter(r=>r.payment_status==='paid_cash').reduce((s,r)=>s+r.num_seats,0);
+
+  document.getElementById('s-reservations').textContent = totalPeople;
+  document.getElementById('s-checkins').textContent     = checkedInPeople;
+  document.getElementById('s-remaining').textContent    = Math.max(0, totalPeople - checkedInPeople);
+  document.getElementById('s-cash').textContent         = formatPrice(cashSeats * (ev.ticket_price||500));
+
+  const tbody = document.getElementById('rsv-tbody');
+  tbody.innerHTML = reservations.map(r => {
+    const seats = r.reservation_seats?.map(rs=>rs.seat?.label).join(' ') || '--';
+    const isIn  = checkins.has(r.id);
+    const isCancelled = r.status === 'cancelled';
+    return `<tr style="${isCancelled ? 'opacity:0.45' : ''}">
+      <td>${isCancelled ? '' : `<input type="checkbox" class="chk-thank-you" data-rsv-id="${r.id}">`}</td>
+      <td style="font-weight:600;color:var(--accent-1)">${r.reservation_code}</td>
+      <td>${r.guest_name}</td>
+      <td>${r.guest_gender || '--'}</td>
+      <td>${r.guest_age_range || '--'}</td>
+      <td>${seats}</td>
+      <td>${r.num_seats}</td>
+      <td><span class="badge ${r.payment_status==='paid_cash'?'badge-ok':'badge-sold'}">${r.payment_status==='paid_cash'?'支払済':'未払い'}</span></td>
+      <td><span class="badge ${isIn?'badge-ok':''}">${isIn?'入場済':'未入場'}</span></td>
+      <td>${r.thank_you_mail_sent ? '<span class="badge badge-ok">送信済</span>' : ''}</td>
+      <td><span class="badge ${isCancelled?'badge-sold':'badge-ok'}">${isCancelled?'キャンセル済':'有効'}</span></td>
+      <td>${isCancelled
+        ? ''
+        : `<button class="btn btn-ghost btn-sm" data-cancel-rsv="${r.id}" style="color:var(--c-red);border-color:rgba(255,107,107,0.2)">キャンセル</button>`}</td>
+    </tr>`;
+  }).join('');
+
+  // ✅ お礼メール選択チェックボックス
+  const countEl = document.getElementById('thank-you-count');
+  const sendBtn = document.getElementById('btn-thank-you');
+  function updateThankYouButton() {
+    countEl.textContent = selectedForThankYou.size;
+    sendBtn.disabled = selectedForThankYou.size === 0;
+  }
+  tbody.querySelectorAll('.chk-thank-you').forEach(chk => {
+    chk.checked = selectedForThankYou.has(chk.dataset.rsvId);
+    chk.addEventListener('change', () => {
+      if (chk.checked) selectedForThankYou.add(chk.dataset.rsvId);
+      else selectedForThankYou.delete(chk.dataset.rsvId);
+      updateThankYouButton();
+    });
+  });
+  updateThankYouButton();
+
+  const selectAll = document.getElementById('chk-select-all');
+  selectAll.checked = false;
+  selectAll.onchange = () => {
+    tbody.querySelectorAll('.chk-thank-you').forEach(chk => {
+      chk.checked = selectAll.checked;
+      if (selectAll.checked) selectedForThankYou.add(chk.dataset.rsvId);
+      else selectedForThankYou.delete(chk.dataset.rsvId);
+    });
+    updateThankYouButton();
+  };
+
+  sendBtn.onclick = () => openThankYouModal(reservations.filter(r => selectedForThankYou.has(r.id)), ev);
+
+  // ✅ キャンセルボタン
+  tbody.querySelectorAll('[data-cancel-rsv]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const rsvId = btn.dataset.cancelRsv;
+      const r = reservations.find(x => x.id === rsvId);
+      if (!r) return;
+      if (!confirm(`予約「${r.reservation_code}」（${r.guest_name} 様）をキャンセルしますか？\n座席は再び予約可能な空席に戻ります。この操作は取り消せません。`)) return;
+      btn.disabled = true; btn.textContent = 'キャンセル中...';
+      try {
+        const result = await cancelReservation(rsvId);
+        if (!result?.success) {
+          showToast('キャンセル失敗: ' + (result?.error || 'エラー'));
+          btn.disabled = false; btn.textContent = 'キャンセル';
+          return;
+        }
+        showToast('予約をキャンセルしました');
+        await loadDashboard(currentDashboardEvent);
+      } catch (err) {
+        showToast('キャンセル失敗: ' + (err.message || 'エラー'));
+        btn.disabled = false; btn.textContent = 'キャンセル';
+      }
+    });
+  });
+
+  // CSV export
+  document.getElementById('btn-csv').onclick = () => exportCSV(ev, reservations, checkins);
+}
+
+// ── お礼メール送信モーダル ──────────────────────────────────────
+const THANK_YOU_DEFAULT_SUBJECT = '【JAZZIN】ご来場ありがとうございました';
+const THANK_YOU_DEFAULT_BODY =
+`{guest_name} 様
+
+先日は「{event_title}」にご来場いただき、誠にありがとうございました。
+
+おかげさまで、素晴らしいひとときをお客様と共有しながら、無事にライブを終えることができました。
+{guest_name}様にお越しいただけたこと、スタッフ一同、心より嬉しく思っております。
+
+またJAZZINのライブでお会いできますことを、楽しみにお待ちしております。
+これからもJAZZINをどうぞよろしくお願いいたします。
+
+JAZZIN`;
+
+function openThankYouModal(recipients, ev) {
+  if (!recipients.length) return;
+  const validRecipients = recipients.filter(r => r.guest_email);
+  const skippedCount = recipients.length - validRecipients.length;
+
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,4,8,0.72);z-index:1000;display:flex;align-items:center;justify-content:center;padding:1rem';
+  overlay.innerHTML = `
+    <div style="background:var(--bg-card,#0c1622);border:1px solid var(--border,#1c2b3a);border-radius:var(--radius-lg,14px);max-width:600px;width:100%;max-height:90vh;overflow-y:auto;padding:1.75rem">
+      <p style="font-size:1.1rem;font-weight:700;margin:0 0 0.25rem">🎉 ライブ終了後のお礼メール</p>
+      <p style="font-size:0.82rem;color:var(--text-secondary,#8aa);margin:0 0 1.25rem">
+        送信対象：<strong style="color:var(--accent-1,#00d4ff)">${validRecipients.length}名</strong>
+        ${skippedCount > 0 ? `（メールアドレス未登録のため ${skippedCount}名は対象外）` : ''}
+      </p>
+      <div class="form-group" style="margin-bottom:0.9rem">
+        <label class="form-label">件名</label>
+        <input type="text" class="form-input" id="ty-subject" value="${THANK_YOU_DEFAULT_SUBJECT}">
+      </div>
+      <div class="form-group" style="margin-bottom:0.5rem">
+        <label class="form-label">本文（{guest_name} は名前、{event_title} はイベント名に自動置換されます）</label>
+        <textarea class="form-input" id="ty-body" rows="12" style="font-family:inherit;line-height:1.7;resize:vertical">${THANK_YOU_DEFAULT_BODY}</textarea>
+      </div>
+      <div id="ty-results" style="font-size:0.8rem;margin-bottom:0.75rem"></div>
+      <div style="display:flex;gap:0.6rem;justify-content:flex-end">
+        <button class="btn btn-ghost btn-sm" id="ty-cancel">キャンセル</button>
+        <button class="btn btn-primary btn-sm" id="ty-send">この内容で送信する</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+
+  overlay.querySelector('#ty-cancel').addEventListener('click', () => overlay.remove());
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+
+  overlay.querySelector('#ty-send').addEventListener('click', async () => {
+    const subject = overlay.querySelector('#ty-subject').value.trim();
+    const body    = overlay.querySelector('#ty-body').value;
+    if (!subject || !body.trim()) { showToast('件名と本文を入力してください'); return; }
+
+    // ✅ 誤送信防止：送信前に必ず確認する
+    if (!confirm(`${validRecipients.length}名にメールを送信します。本当に送信しますか？\n\nこの操作は取り消せません。`)) return;
+
+    const sendBtn = overlay.querySelector('#ty-send');
+    sendBtn.disabled = true; sendBtn.textContent = '送信中...';
+
+    try {
+      const result = await sendThankYouEmails({
+        eventId: ev.id,
+        reservationIds: validRecipients.map(r => r.id),
+        subject,
+        bodyTemplate: body,
+      });
+
+      if (!result?.success) {
+        overlay.querySelector('#ty-results').innerHTML =
+          `<p style="color:var(--c-red,#ff6b6b)">送信に失敗しました：${result?.error || '不明なエラー'}</p>`;
+        sendBtn.disabled = false; sendBtn.textContent = 'この内容で送信する';
+        return;
+      }
+
+      const failed = (result.results || []).filter(r => r.status !== 'sent');
+      overlay.querySelector('#ty-results').innerHTML = `
+        <p style="color:var(--c-green,#4ade80)">✓ 送信完了：成功 ${result.sent}件 / 失敗 ${result.failed}件</p>
+        ${failed.length ? `<p style="color:var(--c-red,#ff6b6b);margin-top:0.4rem">送信に失敗した宛先：<br>${failed.map(f=>`・${f.guest_name || ''}（${f.error || 'エラー'}）`).join('<br>')}</p>` : ''}
+      `;
+      sendBtn.style.display = 'none';
+      overlay.querySelector('#ty-cancel').textContent = '閉じる';
+      selectedForThankYou.clear();
+      await loadDashboard(ev);
+    } catch (err) {
+      overlay.querySelector('#ty-results').innerHTML =
+        `<p style="color:var(--c-red,#ff6b6b)">送信に失敗しました：${err.message || err}</p>`;
+      sendBtn.disabled = false; sendBtn.textContent = 'この内容で送信する';
+    }
+  });
+}
+
+function exportCSV(ev, reservations, checkins) {
+  const rows = [['受付番号','名前','性別','年齢','座席','人数','支払','チェックイン']];
+  reservations.forEach(r => {
+    const seats = r.reservation_seats?.map(rs=>rs.seat?.label).join('/') || '';
+    rows.push([r.reservation_code, r.guest_name, r.guest_gender||'', r.guest_age_range||'', seats, r.num_seats, r.payment_status, checkins.has(r.id)?'済':'']);
+  });
+  const csv = rows.map(r=>r.map(v=>`"${v}"`).join(',')).join('\n');
+  const blob = new Blob(['\uFEFF'+csv], {type:'text/csv;charset=utf-8'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `${ev.title}-${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+}
+
+// ── Events list ──────────────────────────────────────────────
+function renderEventsList() {
+  const el = document.getElementById('events-list');
+  el.innerHTML = allEvents.map(ev => `
+    <div style="display:flex;align-items:center;gap:1rem;padding:1rem;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:0.6rem">
+      <div style="flex:1">
+        <div style="font-weight:600">${ev.title}</div>
+        <div style="font-size:0.8rem;color:var(--text-secondary)">${formatDate(ev.event_at)} — ${formatPrice(ev.ticket_price)}</div>
+      </div>
+      <span class="badge ${ev.status==='published'?'badge-ok':'badge-admin'}">${ev.status}</span>
+      <a href="/admin/event-edit.html?id=${ev.id}" class="btn btn-ghost btn-sm">編集</a>
+      <button class="btn btn-ghost btn-sm" data-delete="${ev.id}" style="color:var(--c-red);border-color:rgba(255,107,107,0.2)" title="削除">🗑</button>
+    </div>`).join('');
+
+  // ✅ 削除ボタン（ワンクリック事故防止のため、イベント名を入力しないと削除できないモーダルを表示）
+  el.querySelectorAll('[data-delete]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const ev = allEvents.find(e => e.id === btn.dataset.delete);
+      if (!ev) return;
+      openDeleteEventModal(ev, btn);
+    });
+  });
+} // renderEventsList END
+
+async function openDeleteEventModal(ev, triggerBtn) {
+  // 何名分の予約が消えるのか、先に数えて見せる（判断材料）
+  const { count: rsvCount } = await supabase
+    .from('reservations')
+    .select('id', { count: 'exact', head: true })
+    .eq('event_id', ev.id)
+    .neq('status', 'cancelled');
+
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,4,8,0.72);z-index:1000;display:flex;align-items:center;justify-content:center;padding:1rem';
+  overlay.innerHTML = `
+    <div style="background:var(--bg-card,#0c1622);border:1px solid rgba(255,107,107,0.35);border-radius:var(--radius-lg,14px);max-width:460px;width:100%;padding:1.75rem">
+      <p style="font-size:1.05rem;font-weight:700;margin:0 0 0.5rem;color:var(--c-red,#ff6b6b)">⚠ イベントを削除しますか？</p>
+      <p style="font-size:0.85rem;color:var(--text-secondary,#8aa);line-height:1.7;margin:0 0 1rem">
+        「<strong style="color:var(--text-primary,#eee)">${ev.title}</strong>」を削除します。<br>
+        この操作は取り消せません。以下も含めてすべて削除されます：
+      </p>
+      <ul style="font-size:0.82rem;color:var(--text-secondary,#8aa);line-height:1.9;margin:0 0 1.25rem;padding-left:1.2rem">
+        <li>予約データ（<strong style="color:var(--c-red,#ff6b6b)">${rsvCount ?? 0}件</strong>、顧客情報・座席の紐付けを含む）</li>
+        <li>チェックイン履歴</li>
+        <li>座席レイアウト</li>
+      </ul>
+      <div class="form-group" style="margin-bottom:1.1rem">
+        <label class="form-label">確認のため、イベント名「<strong>${ev.title}</strong>」を入力してください</label>
+        <input type="text" class="form-input" id="del-confirm-input" autocomplete="off" placeholder="${ev.title}">
+      </div>
+      <div style="display:flex;gap:0.6rem;justify-content:flex-end">
+        <button class="btn btn-ghost btn-sm" id="del-cancel">キャンセル</button>
+        <button class="btn btn-sm" id="del-confirm" disabled
+          style="background:var(--c-red,#ff6b6b);border-color:var(--c-red,#ff6b6b);color:#1a0505;opacity:0.5;cursor:not-allowed">
+          完全に削除する
+        </button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+
+  const input   = overlay.querySelector('#del-confirm-input');
+  const delBtn  = overlay.querySelector('#del-confirm');
+  const cancel  = () => overlay.remove();
+
+  input.addEventListener('input', () => {
+    const match = input.value === ev.title;
+    delBtn.disabled = !match;
+    delBtn.style.opacity = match ? '1' : '0.5';
+    delBtn.style.cursor  = match ? 'pointer' : 'not-allowed';
+  });
+  overlay.querySelector('#del-cancel').addEventListener('click', cancel);
+  overlay.addEventListener('click', e => { if (e.target === overlay) cancel(); });
+
+  delBtn.addEventListener('click', async () => {
+    if (input.value !== ev.title) return; // 念のため二重チェック
+    delBtn.disabled = true; delBtn.textContent = '削除中...';
+    if (triggerBtn) { triggerBtn.disabled = true; triggerBtn.textContent = '削除中...'; }
+    try {
+      const result = await deleteEvent(ev.id);
+      if (!result?.success) {
+        throw new Error(
+          result?.error === 'unauthorized' ? '権限がありません（管理者としてログインし直してください）' :
+          result?.error === 'not_found'    ? 'イベントが見つかりません（既に削除済みの可能性があります）' :
+          result?.error || '不明なエラー'
+        );
+      }
+      overlay.remove();
+      showToast('イベントを削除しました');
+      await loadAllEvents();
+    } catch (err) {
+      showToast('削除失敗: ' + (err.message || 'エラー'));
+      delBtn.disabled = false; delBtn.textContent = '完全に削除する';
+      if (triggerBtn) { triggerBtn.disabled = false; triggerBtn.textContent = '🗑'; }
+    }
+  });
+}
+
+// ── Event form ───────────────────────────────────────────────
+let editingEventId = null;
+let autosaveTimer  = null;
+const DRAFT_KEY    = 'jazzin_event_draft';
+
+// 自動保存するフィールドID一覧
+const FORM_FIELDS = [
+  'ef-title','ef-venue','ef-event-at','ef-doors-at',
+  'ef-price','ef-capacity','ef-rows','ef-cols',
+  'ef-address','ef-desc','ef-notes',
+  'ef-status','ef-publish-at'
+];
+
+function saveDraft() {
+  // 編集中（既存イベント）は自動保存しない。新規作成のみ対象
+  if (editingEventId) return;
+  const draft = {};
+  FORM_FIELDS.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) draft[id] = el.value;
+  });
+  draft._savedAt = new Date().toLocaleTimeString('ja-JP');
+  localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+  // 保存インジケーター更新
+  const indicator = document.getElementById('draft-indicator');
+  if (indicator) indicator.textContent = `下書き自動保存済 ${draft._savedAt}`;
+}
+
+function loadDraft() {
+  try {
+    const raw = localStorage.getItem(DRAFT_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+
+function clearDraft() {
+  localStorage.removeItem(DRAFT_KEY);
+  const indicator = document.getElementById('draft-indicator');
+  if (indicator) indicator.textContent = '';
+}
+
+function startAutosave() {
+  // 各フィールドの入力イベントで3秒後に保存
+  FORM_FIELDS.forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener('input', () => {
+      clearTimeout(autosaveTimer);
+      const indicator = document.getElementById('draft-indicator');
+      if (indicator) indicator.textContent = '入力中...';
+      autosaveTimer = setTimeout(saveDraft, 3000);
+    });
+    el.addEventListener('change', () => {
+      clearTimeout(autosaveTimer);
+      autosaveTimer = setTimeout(saveDraft, 1000);
+    });
+  });
+}
+
+document.getElementById('btn-new-event').addEventListener('click', () => openEventForm(null));
+document.getElementById('btn-event-cancel').addEventListener('click', () => {
+  if (confirm('下書きを破棄しますか？')) {
+    clearDraft();
+    document.getElementById('event-form-wrap').style.display = 'none';
+  }
+});
+
+// ✅ ローカル時刻文字列（datetime-local用）に変換
+function toLocalDatetimeStr(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d)) return '';
+  const pad = n => String(n).padStart(2,'0');
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+async function openEventForm(ev) {
+  editingEventId = ev?.id || null;
+  document.getElementById('event-form-title').textContent = ev ? 'イベント編集' : 'イベント作成';
+
+  if (ev) {
+    // ✅ 一覧取得時は全フィールドが含まれないため、DBから完全なデータを取得する
+    const { data: fullEv, error } = await supabase
+      .from('events')
+      .select('id, title, venue_name, venue_address, event_at, doors_open_at, ticket_price, capacity, description, notes, hero_image_url, status, publish_at')
+      .eq('id', ev.id)
+      .single();
+
+    if (error || !fullEv) { showToast('イベント情報の取得に失敗しました'); return; }
+
+    document.getElementById('ef-title').value      = fullEv.title || '';
+    document.getElementById('ef-venue').value      = fullEv.venue_name || '';
+    document.getElementById('ef-event-at').value  = toLocalDatetimeStr(fullEv.event_at);
+    document.getElementById('ef-doors-at').value  = toLocalDatetimeStr(fullEv.doors_open_at);
+    document.getElementById('ef-price').value      = fullEv.ticket_price || 500;
+    document.getElementById('ef-capacity').value   = fullEv.capacity || 36;
+    document.getElementById('ef-address').value    = fullEv.venue_address || '';
+    document.getElementById('ef-desc').value       = fullEv.description || '';
+    document.getElementById('ef-notes').value      = fullEv.notes || '';
+    document.getElementById('ef-status').value     = fullEv.status || 'draft';
+    document.getElementById('ef-publish-at').value = toLocalDatetimeStr(fullEv.publish_at);
+
+    // ✅ ヒーロー画像の復元
+    const heroUrl = fullEv.hero_image_url || '';
+    document.getElementById('ef-hero').value = heroUrl;
+    if (heroUrl) {
+      document.getElementById('hero-preview-img').src = heroUrl;
+      document.getElementById('hero-preview-wrap').style.display = 'block';
+      document.getElementById('hero-upload-hint').style.display = 'none';
+      document.getElementById('btn-hero-clear').style.display = 'inline-flex';
+    } else {
+      document.getElementById('hero-preview-wrap').style.display = 'none';
+      document.getElementById('hero-upload-hint').style.display = 'block';
+      document.getElementById('btn-hero-clear').style.display = 'none';
+    }
+
+    document.getElementById('btn-event-dup').style.display = 'inline-flex';
+  } else {
+    // 新規作成：下書きがあれば復元、なければデフォルト
+    const draft = loadDraft();
+    if (draft) {
+      const hasDraft = Object.keys(draft).some(k => k !== '_savedAt' && draft[k]);
+      if (hasDraft && confirm(`下書きが見つかりました（${draft._savedAt}）。復元しますか？`)) {
+        FORM_FIELDS.forEach(id => {
+          const el = document.getElementById(id);
+          if (el && draft[id] !== undefined) el.value = draft[id];
+        });
+        const indicator = document.getElementById('draft-indicator');
+        if (indicator) indicator.textContent = `下書き復元済 ${draft._savedAt}`;
+      } else {
+        // 復元しない場合はフォームをリセット
+        FORM_FIELDS.forEach(id => {
+          const el = document.getElementById(id);
+          if (el) el.value = el.defaultValue || '';
+        });
+        document.getElementById('ef-price').value    = '500';
+        document.getElementById('ef-capacity').value = '36';
+        document.getElementById('ef-rows').value     = '6';
+        document.getElementById('ef-cols').value     = '6';
+        document.getElementById('ef-status').value   = 'draft';
+      }
+    }
+    document.getElementById('btn-event-dup').style.display = 'none';
+    // 自動保存スタート
+    startAutosave();
+  }
+
+  document.getElementById('event-form-wrap').style.display = 'block';
+  document.getElementById('event-form-wrap').scrollIntoView({ behavior:'smooth' });
+}
+
+document.getElementById('btn-event-save').addEventListener('click', async () => {
+  const rows = parseInt(document.getElementById('ef-rows').value)||6;
+  const cols = parseInt(document.getElementById('ef-cols').value)||6;
+
+  // ✅ datetime-local（ローカル時刻）→ ISO（UTC）変換
+  function localToISO(val) {
+    if (!val) return null;
+    const d = new Date(val);
+    return isNaN(d) ? null : d.toISOString();
+  }
+
+  const payload = {
+    title:         document.getElementById('ef-title').value.trim(),
+    venue_name:    document.getElementById('ef-venue').value.trim(),
+    event_at:      localToISO(document.getElementById('ef-event-at').value),
+    doors_open_at: localToISO(document.getElementById('ef-doors-at').value) || null,
+    ticket_price:  parseInt(document.getElementById('ef-price').value)||500,
+    capacity:      rows * cols,
+    venue_address: document.getElementById('ef-address').value.trim() || null,
+    description:   document.getElementById('ef-desc').value.trim() || null,
+    notes:         document.getElementById('ef-notes').value.trim() || null,
+    hero_image_url:document.getElementById('ef-hero').value.trim() || null,
+    status:        document.getElementById('ef-status').value,
+    publish_at:    localToISO(document.getElementById('ef-publish-at').value) || null,
+  };
+
+  if (!payload.title || !payload.venue_name || !payload.event_at) {
+    showToast('必須項目を入力してください'); return;
+  }
+
+  let eventId = editingEventId;
+  if (editingEventId) {
+    const { error } = await supabase.from('events').update(payload).eq('id', editingEventId);
+    if (error) { showToast('保存失敗: ' + error.message); return; }
+  } else {
+    const { data, error } = await supabase.from('events').insert(payload).select('id').single();
+    if (error) { showToast('作成失敗: ' + error.message); return; }
+    eventId = data.id;
+    // Auto-generate seats
+    await generateSeats(eventId, rows, cols);
+  }
+
+  clearDraft();
+  showToast('保存しました');
+  document.getElementById('event-form-wrap').style.display = 'none';
+  await loadAllEvents();
+});
+
+// ── Duplicate event ──────────────────────────────────────────
+document.getElementById('btn-event-dup').addEventListener('click', async () => {
+  if (!editingEventId) return;
+  const ev = allEvents.find(e=>e.id===editingEventId);
+  if (!ev) return;
+
+  const { data: fullEv } = await supabase.from('events').select('*').eq('id', editingEventId).single();
+  const { id: _, created_at: __, updated_at: ___, ...rest } = fullEv;
+  const { data: newEv, error } = await supabase.from('events')
+    .insert({ ...rest, title: rest.title + ' (複製)', status: 'draft' })
+    .select('id').single();
+  if (error) { showToast('複製失敗'); return; }
+
+  // Duplicate seats
+  const { data: oldSeats } = await supabase.from('seats').select('row_num,col_num,label').eq('event_id', editingEventId);
+  if (oldSeats?.length) {
+    await supabase.from('seats').insert(oldSeats.map(s=>({...s, event_id: newEv.id})));
+  }
+  showToast('複製しました');
+  await loadAllEvents();
+});
+
+// ── Generate seats ───────────────────────────────────────────
+async function generateSeats(eventId, rows, cols) {
+  const seats = [];
+  const rowLetters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  for (let r = 1; r <= rows; r++) {
+    for (let c = 1; c <= cols; c++) {
+      seats.push({
+        event_id: eventId,
+        row_num: r, col_num: c,
+        label: `${rowLetters[r-1]}-${c}`,
+        status: 'available',
+      });
+    }
+  }
+  const { error } = await supabase.from('seats').insert(seats);
+  if (error) console.error('seat gen error', error);
+}
+
+// ── Init ─────────────────────────────────────────────────────
+async function init() {
+  const ok = await checkAuth();
+  if (!ok) return;
+  await loadAllEvents();
+}
+init();
+
+// ✅ HTML の onchange/onclick から呼べるようにグローバルに公開
+window.handleHeroUpload = async function(file) {
+  if (!file) return;
+  const area = document.getElementById('hero-upload-area');
+  const hint = document.getElementById('hero-upload-hint');
+  const uploading = document.getElementById('hero-uploading');
+  const preview = document.getElementById('hero-preview-wrap');
+  const previewImg = document.getElementById('hero-preview-img');
+  const clearBtn = document.getElementById('btn-hero-clear');
+
+  hint.style.display = 'none';
+  preview.style.display = 'none';
+  uploading.style.display = 'block';
+  area.style.borderColor = 'var(--accent-1)';
+
+  try {
+    // ファイル名をユニークに（圧縮・変換一切なし）
+    const ext = file.name.split('.').pop().toLowerCase();
+    const fileName = `events/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+
+    // Supabase Storageにそのままアップロード（圧縮なし）
+    const { data, error } = await supabase.storage
+      .from('event-images')
+      .upload(fileName, file, {
+        contentType: file.type,
+        upsert: false,
+      });
+
+    if (error) throw error;
+
+    // 公開URLを取得
+    const { data: urlData } = supabase.storage
+      .from('event-images')
+      .getPublicUrl(fileName);
+
+    const publicUrl = urlData.publicUrl;
+    document.getElementById('ef-hero').value = publicUrl;
+
+    // プレビュー表示
+    previewImg.src = publicUrl;
+    preview.style.display = 'block';
+    hint.style.display = 'none';
+    clearBtn.style.display = 'inline-flex';
+    showToast('画像をアップロードしました');
+
+  } catch (err) {
+    showToast('アップロード失敗: ' + (err.message || 'エラー'));
+    hint.style.display = 'block';
+    console.error(err);
+  } finally {
+    uploading.style.display = 'none';
+    area.style.borderColor = 'var(--border)';
+  }
+}
+
+window.handleHeroDrop = function(event) {
+  event.preventDefault();
+  document.getElementById('hero-upload-area').style.borderColor = 'var(--border)';
+  const file = event.dataTransfer.files[0];
+  if (file && file.type.startsWith('image/')) window.handleHeroUpload(file);
+}
+
+window.clearHeroImage = function() {
+  document.getElementById('ef-hero').value = '';
+  document.getElementById('hero-preview-img').src = '';
+  document.getElementById('hero-preview-wrap').style.display = 'none';
+  document.getElementById('hero-upload-hint').style.display = 'block';
+  document.getElementById('btn-hero-clear').style.display = 'none';
+  document.getElementById('ef-hero-file').value = '';
+  document.getElementById('hero-upload-area').style.borderColor = 'var(--border)';
+}
+
+</script>
+</body>
+</html>

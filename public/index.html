@@ -46,6 +46,20 @@
   transition: color 200ms;
 }
 #admin-link:hover { color: rgba(255,255,255,0.3); }
+
+.site-footer {
+  position: relative; z-index: 1;
+  padding: 2.5rem var(--page-px) 3.5rem;
+  text-align: center;
+}
+.footer-official-link {
+  display: inline-flex; align-items: center; gap: 0.4rem;
+  font-size: 0.78rem; color: var(--text-secondary, var(--fg-2));
+  text-decoration: none; letter-spacing: 0.03em;
+  padding: 0.5rem 1rem; border: 1px solid var(--border); border-radius: 999px;
+  transition: color 160ms, border-color 160ms;
+}
+.footer-official-link:hover { color: var(--accent-1); border-color: var(--accent-1); }
 </style>
 <!-- Cloudflare Web Analytics -->
 <script type='module' src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "0b0a908e36ff4880a6867235b78b567b"}'></script>
@@ -125,6 +139,13 @@
     </section>
   </div>
 </main>
+
+<footer class="site-footer">
+  <a href="https://jazzinmusic-official-pages.netlify.app/" target="_blank" rel="noopener" class="footer-official-link">
+    <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="7.5"/><path d="M2.5 10h15M10 2.5c2.2 2 3.3 5 3.3 7.5s-1.1 5.5-3.3 7.5c-2.2-2-3.3-5-3.3-7.5S7.8 4.5 10 2.5Z"/></svg>
+    JAZZIN 公式サイト
+  </a>
+</footer>
 
 <script type="module">
 import { supabase, fetchPublishedEvents, formatDate, formatPrice, availabilityLabel } from '/core/supabase.js';
