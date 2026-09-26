@@ -641,6 +641,51 @@ function openThankYouModal(recipients, ev) {
   tyBodyEl.addEventListener('keyup', tySaveSelection);
   tyBodyEl.addEventListener('blur', tySaveSelection);
 
+  // ✅ 外部サイト（ニュースサイト・Wordなど）からのコピペ対策。
+  //    そのまま貼り付けると、貼り付け元の背景色・文字色・フォント指定などの
+  //    インラインスタイルがエディタに持ち込まれ、ダーク画面と衝突して
+  //    「文字が見えない」「白い帯ができる」といった表示崩れの原因になる。
+  //    貼り付けは常にプレーンテキスト化し、書式（太字・下線・色）は
+  //    貼り付け後に上のツールバーから手動で設定してもらう。
+  tyBodyEl.addEventListener('paste', e => {
+    e.preventDefault();
+    const clipboard = e.clipboardData || window.clipboardData;
+    const text = clipboard ? clipboard.getData('text/plain') : '';
+    if (!text) return;
+
+    tyRestoreSelection();
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0 || !tyBodyEl.contains(sel.anchorNode)) {
+      // 選択範囲が取れない場合はエディタの末尾に追加する
+      const range = document.createRange();
+      range.selectNodeContents(tyBodyEl);
+      range.collapse(false);
+      sel.removeAllRanges();
+      sel.addRange(range);
+    }
+
+    const range = sel.getRangeAt(0);
+    range.deleteContents();
+    const lines = text.split(/\r\n|\r|\n/);
+    const frag = document.createDocumentFragment();
+    lines.forEach((line, i) => {
+      if (i > 0) frag.appendChild(document.createElement('br'));
+      if (line) frag.appendChild(document.createTextNode(line));
+    });
+    let lastNode = frag.lastChild;
+    range.insertNode(frag);
+
+    // カーソルを貼り付けた内容の直後に移動
+    if (lastNode) {
+      const newRange = document.createRange();
+      newRange.setStartAfter(lastNode);
+      newRange.collapse(true);
+      sel.removeAllRanges();
+      sel.addRange(newRange);
+    }
+    tySaveSelection();
+  });
+
   overlay.querySelectorAll('.ty-cmd').forEach(btn => {
     // mousedownの時点でpreventDefaultしないと、ボタン押下でエディタのフォーカス・選択範囲が失われる
     btn.addEventListener('mousedown', e => e.preventDefault());
