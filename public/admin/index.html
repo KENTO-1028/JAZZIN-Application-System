@@ -195,7 +195,7 @@ textarea.form-input { min-height: 80px; resize: vertical; }
       </div>
       <div style="display:flex;gap:0.75rem;margin-bottom:1rem;align-items:center;flex-wrap:wrap">
         <button class="btn btn-ghost btn-sm" id="btn-csv"><svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:5px"><path d="M4 13v2.5A1.5 1.5 0 0 0 5.5 17h9a1.5 1.5 0 0 0 1.5-1.5V13"/><path d="M10 3v9M6 8.5 10 12.5l4-4"/></svg>CSV出力</button>
-        <button class="btn btn-primary btn-sm" id="btn-thank-you" disabled><svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:5px"><path d="M10 3v3M10 14v3M3 10h3M14 10h3M5.5 5.5l2 2M12.5 12.5l2 2M5.5 14.5l2-2M12.5 7.5l2-2"/></svg>お礼メールを送る（<span id="thank-you-count">0</span>件選択中）</button>
+        <button class="btn btn-primary btn-sm" id="btn-thank-you" disabled><svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:5px"><path d="M10 3v3M10 14v3M3 10h3M14 10h3M5.5 5.5l2 2M12.5 12.5l2 2M5.5 14.5l2-2M12.5 7.5l2-2"/></svg>メールを送る（<span id="thank-you-count">0</span>件選択中）</button>
       </div>
       <div style="overflow-x:auto">
         <table class="data-table" id="rsv-table">
@@ -203,7 +203,7 @@ textarea.form-input { min-height: 80px; resize: vertical; }
             <tr>
               <th><input type="checkbox" id="chk-select-all"></th>
               <th>受付番号</th><th>名前</th><th>性別</th><th>年齢</th><th>座席</th><th>人数</th>
-              <th>支払</th><th>チェックイン</th><th>お礼メール</th><th>状態</th><th>操作</th>
+              <th>支払</th><th>チェックイン</th><th>メール送信</th><th>状態</th><th>操作</th>
             </tr>
           </thead>
           <tbody id="rsv-tbody"></tbody>
@@ -581,7 +581,7 @@ function openThankYouModal(recipients, ev) {
   overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,4,8,0.72);z-index:1000;display:flex;align-items:center;justify-content:center;padding:1rem';
   overlay.innerHTML = `
     <div style="background:var(--bg-card,#0c1622);border:1px solid var(--border,#1c2b3a);border-radius:var(--radius-lg,14px);max-width:600px;width:100%;max-height:90vh;overflow-y:auto;padding:1.75rem">
-      <p style="font-size:1.1rem;font-weight:700;margin:0 0 0.25rem"><svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:5px"><path d="M10 3v3M10 14v3M3 10h3M14 10h3M5.5 5.5l2 2M12.5 12.5l2 2M5.5 14.5l2-2M12.5 7.5l2-2"/></svg>ライブ終了後のお礼メール</p>
+      <p style="font-size:1.1rem;font-weight:700;margin:0 0 0.25rem"><svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:5px"><path d="M10 3v3M10 14v3M3 10h3M14 10h3M5.5 5.5l2 2M12.5 12.5l2 2M5.5 14.5l2-2M12.5 7.5l2-2"/></svg>参加者への一斉メール送信</p>
       <p style="font-size:0.82rem;color:var(--text-secondary,#8aa);margin:0 0 1.25rem">
         送信対象：<strong style="color:var(--accent-1,#00d4ff)">${validRecipients.length}名</strong>
         ${skippedCount > 0 ? `（メールアドレス未登録のため ${skippedCount}名は対象外）` : ''}
