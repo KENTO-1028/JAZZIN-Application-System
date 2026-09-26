@@ -60,6 +60,10 @@
 .main-area {
   padding: clamp(1.25rem, 3vw, 2rem);
   overflow-y: auto;
+  /* ✅ グリッドアイテムのデフォルト(min-width:auto)のままだと、中の要素（テーブル等）が
+     画面幅より広くなった時にページ全体が横に広がってしまう。0にして、はみ出す要素側の
+     overflow-x:auto だけで吸収されるようにする（保険）。 */
+  min-width: 0;
   /* prevent content going under Safari toolbar */
   padding-bottom: calc(clamp(1.25rem, 3vw, 2rem) + env(safe-area-inset-bottom, 0px));
 }
@@ -1389,6 +1393,7 @@ async function loadReports() {
     noShowEl.innerHTML = `<p style="text-align:center;color:var(--text-secondary);font-size:0.85rem;padding:1.5rem 0">該当する方はいません</p>`;
   } else {
     noShowEl.innerHTML = `
+      <div style="overflow-x:auto">
       <table class="data-table">
         <thead><tr><th>お名前</th><th>メール</th><th>ノーショー回数</th><th>該当イベント</th></tr></thead>
         <tbody>
@@ -1400,7 +1405,8 @@ async function loadReports() {
               <td style="font-size:0.78rem;color:var(--text-secondary)">${n.events.join('、')}</td>
             </tr>`).join('')}
         </tbody>
-      </table>`;
+      </table>
+      </div>`;
   }
 }
 
